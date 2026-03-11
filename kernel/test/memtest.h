@@ -79,7 +79,6 @@ static void test_kmalloc_size_one_past_boundary() {
 static void test_kmalloc_zero() {
     void* p = MemoryAllocator::kmalloc(0);
     TEST_ASSERT_NULL(p, "kmalloc(0) returns null");
-    MemoryAllocator::kfree(p);
 }
 
 static void test_kmalloc_kfree_roundtrip() {

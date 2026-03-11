@@ -19,4 +19,15 @@ inline void* memcpy(void* dest, const void* source, size_t len) {
     return dest;
 }
 
+inline int memcmp(const void *src1, const void *src2, size_t len) {
+    const auto *p1 = (const uint8_t *)src1;
+    const auto *p2 = (const uint8_t *)src2;
+    for (size_t i = 0; i < len; ++i) {
+        if (p1[i] != p2[i]) {
+            return (p1[i] < p2[i]) ? -1 : 1;
+        }
+    }
+    return 0;
+}
+
 #endif

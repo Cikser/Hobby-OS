@@ -25,8 +25,12 @@ private:
     static VirtqAvail* m_avail;
     static VirtqUsed* m_used;
     static VirtqDesc* m_desc;
-    static VirtioBlkReqHeader m_req;
-    static volatile uint8_t m_status;
+    static VirtioBlkReqHeader m_req[QUEUE_SIZE / 3];
+    static volatile uint8_t m_status[QUEUE_SIZE / 3];
+    static uint8_t m_free[QUEUE_SIZE / 3];
+
+    static int  allocSlot();
+    static void freeSlot(int slot);
 
 };
 

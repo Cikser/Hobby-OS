@@ -5,8 +5,9 @@
 #include "../../mm/mem.h"
 
 uint16_t Disk::m_usedIdx = 0;
-volatile uint8_t Disk::m_status = 0;
-VirtioBlkReqHeader Disk::m_req;
+volatile uint8_t Disk::m_status[QUEUE_SIZE / 3];
+VirtioBlkReqHeader Disk::m_req[QUEUE_SIZE / 3];
+uint8_t Disk::m_free[QUEUE_SIZE / 3];
 VirtqAvail* Disk::m_avail = nullptr;
 VirtqUsed* Disk::m_used = nullptr;
 VirtqDesc* Disk::m_desc = nullptr;
@@ -60,29 +61,52 @@ void Disk::init() {
     Console::kprintf("Disk initialized\n");
 }
 
-void Disk::sendRequest(uint64_t sector, void *buf, opType op) {
-    m_req.type = op;
-    m_req.reserved = 0;
-    m_req.sector = sector;
-    m_status = 0xFF;
+int Disk::allocSlot() {
+    for (int i = 0; i < QUEUE_SIZE / 3; i++) {
+        if (!m_free[i]) {
+            m_free[i] = 1;
+            return i;
+        }
+    }
+    return -1;
+}
 
-    m_desc[0] = { (uint64_t)&m_req, sizeof(m_req), VIRTQ_DESC_F_NEXT, 1 };
-    m_desc[1] = { (uint64_t)buf, 512, (uint16_t)(VIRTQ_DESC_F_NEXT | (op == READ ? VIRTQ_DESC_F_WRITE : 0)), 2 };
-    m_desc[2] = { (uint64_t)&m_status, 1, VIRTQ_DESC_F_WRITE, 0 };
+void Disk::freeSlot(int slot) {
+    m_free[slot] = 0;
+}
 
-    m_avail->ring[m_avail->idx % QUEUE_SIZE] = 0;
+void Disk::sendRequest(uint64_t sector, void* buf, opType op) {
+    int slot = allocSlot();
+    if (slot < 0)
+        Console::panic("Disk::sendRequest(): no free slots");
+
+    int d0 = slot * 3;
+    int d1 = slot * 3 + 1;
+    int d2 = slot * 3 + 2;
+
+    m_req[slot].type = op;
+    m_req[slot].reserved = 0;
+    m_req[slot].sector = sector;
+    m_status[slot] = 0xFF;
+
+    m_desc[d0] = {(uint64_t)&m_req[slot], sizeof(VirtioBlkReqHeader), VIRTQ_DESC_F_NEXT, (uint16_t)d1 };
+    m_desc[d1] = {(uint64_t)buf, 512, (uint16_t)(VIRTQ_DESC_F_NEXT | (op == READ ? VIRTQ_DESC_F_WRITE : 0)), (uint16_t)d2 };
+    m_desc[d2] = {(uint64_t)&m_status[slot], 1, VIRTQ_DESC_F_WRITE, 0 };
+
+    m_avail->ring[m_avail->idx % QUEUE_SIZE] = d0;
     __sync_synchronize();
     m_avail->idx++;
     __sync_synchronize();
 
     writeReg(VIRTIO_QUEUE_NOTIFY, 0);
 
-    while (m_status == 0xFF);
-
+    while (m_status[slot] == 0xFF) {}
     __sync_synchronize();
 
-    if (m_status != 0)
-        Console::panic("Disk: request failed");
+    if (m_status[slot] != 0)
+        Console::panic("Disk::sendRequest(): request failed");
+
+    freeSlot(slot);
 }
 
 void Disk::read(uint64_t sector, void *buf) {

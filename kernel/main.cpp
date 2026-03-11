@@ -1,5 +1,6 @@
-#include "io/console/console.h"
+#include "kalloc.h"
 #include "hw/riscv.h"
+#include "test/memtest.h"
 
 int main();
 
@@ -8,6 +9,7 @@ extern "C" void start() {
 }
 
 int main() {
-	Console::kprintf("Hello World!\n");
+	MemoryAllocator::init();
+	MemTest::run();
 	RiscV::stopEmulation();
 }

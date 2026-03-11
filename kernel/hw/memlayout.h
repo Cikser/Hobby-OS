@@ -23,7 +23,7 @@ public:
     }
 
     static uint64_t pageRoundUp(uint64_t addr) {
-        return (addr + PAGE_SIZE - 1) & (~PAGE_SIZE - 1);
+        return (addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
     }
 
 };

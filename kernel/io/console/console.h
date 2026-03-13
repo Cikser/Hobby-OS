@@ -1,5 +1,5 @@
-#ifndef __CONSOLE_H__
-#define __CONSOLE_H__
+#ifndef RISC_V_CONSOLE_H
+#define RISC_V_CONSOLE_H
 
 #include "../../types.h"
 
@@ -13,8 +13,8 @@ public:
 
 private:
     static void kputs(const char *s);
-    static void kputulong(const uint64_t xx, const uint32_t base = 10);
-    static void kputi(const int64_t xx, const uint32_t base = 10);
+    static void kputulong(uint64_t xx, uint32_t base = 10);
+    static void kputi(int64_t xx, uint32_t base = 10);
     
 };
 

@@ -10,7 +10,7 @@ Slab *Slab::create(MemCache *cache) {
 }
 
 Slab *Slab::createSmall(MemCache *cache) {
-    Slab *slab = (Slab*)Buddy::alloc(cache->m_slabSize);
+    auto slab = (Slab*)Buddy::alloc(cache->m_slabSize);
     slab->m_cache = cache;
     slab->m_maxSlots = (cache->m_slabSize - sizeof(Slab)) / cache->m_objSize;
     slab->m_freeSlots = slab->m_maxSlots;
@@ -26,7 +26,7 @@ Slab *Slab::createSmall(MemCache *cache) {
 }
 
 Slab *Slab::createLarge(MemCache *cache) {
-    Slab *slab = (Slab*)MemCache::s_metaCache.alloc();
+    auto slab = (Slab*)MemCache::s_metaCache.alloc();
     slab->m_cache = cache;
     slab->m_maxSlots = (cache->m_slabSize) / cache->m_objSize;
     slab->m_freeSlots = slab->m_maxSlots;
@@ -59,7 +59,7 @@ void Slab::destroyLarge(Slab *slab) {
 
 void* Slab::getSlot() {
     if (m_freeSlots == 0) return nullptr;
-    void* ret = (void*)((uint64_t)m_start + m_free * m_cache->m_objSize);
+    auto ret = (void*)((uint64_t)m_start + m_free * m_cache->m_objSize);
     m_free = *(uint32_t*)ret;
     m_freeSlots--;
     return ret;

@@ -1,5 +1,5 @@
-#ifndef __RISC_V_H__
-#define __RISC_V_H__
+#ifndef RISC_V_RISC_V_H
+#define RISC_V_RISC_V_H
 
 #include "../types.h"
 

@@ -35,8 +35,8 @@ void *MemoryAllocator::kmalloc(size_t size) {
 }
 
 void MemoryAllocator::kfree(void *ptr) {
-    for (int i = 0; i < SMB_SIZE; i++) {
-        if (m_smb[i].free(ptr) == 0)
+    for (auto & cache : m_smb) {
+        if (cache.free(ptr) == 0)
             return;
     }
     Console::panic("MemoryAllocator::kfree(): wrong pointer freed");

@@ -1,7 +1,3 @@
-//
-// Created by cira on 2/12/26.
-//
-
 #ifndef RISC_V_LD_H
 #define RISC_V_LD_H
 

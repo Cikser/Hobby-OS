@@ -1,5 +1,5 @@
-#ifndef __HW_H__
-#define __HW_H__
+#ifndef RISC_V_MEMLAYOUT_H
+#define RISC_V_MEMLAYOUT_H
 
 #include "../types.h"
 

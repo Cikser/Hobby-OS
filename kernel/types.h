@@ -1,5 +1,5 @@
-#ifndef __TYPES_H__
-#define __TYPES_H__
+#ifndef RISC_V_TYPES_H
+#define RISC_V_TYPES_H
 
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;

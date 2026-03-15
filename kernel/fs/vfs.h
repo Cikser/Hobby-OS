@@ -1,0 +1,22 @@
+#ifndef RISC_V_VFS_H
+#define RISC_V_VFS_H
+
+#include "vfs_inode.h"
+#include "file.h"
+
+class Vfs {
+public:
+    static void mount(VfsMount* mount);
+    static File* open(const char* path, uint32_t flags);
+    static int mkdir(const char* path);
+    static int create(const char* path);
+    static int unlink(const char* path);
+
+private:
+    static VfsInode* resolvePath(const char* path);
+    static VfsInode* resolveParent(const char* path, const char** outName);
+
+    static VfsMount* m_mount;
+};
+
+#endif

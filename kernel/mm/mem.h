@@ -30,4 +30,9 @@ inline int memcmp(const void *src1, const void *src2, size_t len) {
     return 0;
 }
 
+inline int strcmp(const char* src1, const char* src2) {
+    while (*src1 && *src1 == *src2) { src1++; src2++; }
+    return *src1 - *src2;
+}
+
 #endif

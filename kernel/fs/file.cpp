@@ -1,14 +1,6 @@
 #include "file.h"
 
-KMemCache<File> File::s_cache = KMemCache<File>();
-
-void* File::operator new(size_t size) {
-    return s_cache.alloc();
-}
-
-void File::operator delete(void* ptr) {
-    s_cache.free(ptr);
-}
+KMemCache<File>* File::s_cache = new KMemCache<File>();
 
 int File::read(void* buf, uint64_t len) const {
     if (!(m_flags & O_RDONLY)) return -1;

@@ -10,8 +10,12 @@ public:
     File(VfsInode* inode, VfsMount* mount, uint32_t flags)
         : m_inode(inode), m_mount(mount), m_flags(flags), m_offset(0) {}
 
-    void* operator new(size_t size);
-    void operator delete(void* ptr);
+    void* operator new(size_t size) {
+        if (!s_cache)
+            s_cache = new KMemCache<File>();
+        return s_cache->alloc();
+    }
+    void operator delete(void* ptr) { s_cache->free(ptr); }
 
     int read(void* buf, uint64_t len) const;
     int write(const void* buf, uint64_t len);
@@ -26,7 +30,7 @@ public:
     static constexpr uint32_t O_TRUNC  = 0x8;
 
 private:
-    static KMemCache<File> s_cache;
+    static KMemCache<File>* s_cache;
 
     VfsInode* m_inode;
     VfsMount* m_mount;

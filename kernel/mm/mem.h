@@ -3,7 +3,7 @@
 
 #include "../types.h"
 
-inline void* memset(void *dest, int val, size_t len) {
+extern "C" inline void* memset(void *dest, int val, size_t len) {
     uint8_t *ptr = (uint8_t*)dest;
     while (len-- > 0) {
         *ptr++ = (uint8_t)val;
@@ -11,7 +11,7 @@ inline void* memset(void *dest, int val, size_t len) {
     return dest;
 }
 
-inline void* memcpy(void* dest, const void* source, size_t len) {
+extern "C" inline void* memcpy(void* dest, const void* source, size_t len) {
     const uint8_t* src = (const uint8_t*)source;
     for (size_t i = 0; i < len; ++i) {
         ((uint8_t*)dest)[i] = src[i];
@@ -19,7 +19,7 @@ inline void* memcpy(void* dest, const void* source, size_t len) {
     return dest;
 }
 
-inline int memcmp(const void *src1, const void *src2, size_t len) {
+extern "C" inline int memcmp(const void *src1, const void *src2, size_t len) {
     const auto *p1 = (const uint8_t *)src1;
     const auto *p2 = (const uint8_t *)src2;
     for (size_t i = 0; i < len; ++i) {

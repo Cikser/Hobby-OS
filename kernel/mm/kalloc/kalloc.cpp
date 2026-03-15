@@ -41,3 +41,19 @@ void MemoryAllocator::kfree(void *ptr) {
     }
     Console::panic("MemoryAllocator::kfree(): wrong pointer freed");
 }
+
+void* operator new(size_t size) {
+    return MemoryAllocator::kmalloc(size);
+}
+
+void operator delete(void* ptr) noexcept {
+    MemoryAllocator::kfree(ptr);
+}
+
+void* operator new[](size_t size) {
+    return MemoryAllocator::kmalloc(size);
+}
+
+void operator delete[](void* ptr) noexcept {
+    MemoryAllocator::kfree(ptr);
+}

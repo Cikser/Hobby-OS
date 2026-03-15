@@ -12,6 +12,8 @@ public:
     static void read(uint64_t sector, void* buf);
     static void write(uint64_t sector, void* buf);
 
+    static constexpr uint32_t SECTOR_SIZE = 512;
+
 private:
     static void writeReg(uint32_t offset, uint32_t value);
     static uint32_t readReg(uint32_t offset);

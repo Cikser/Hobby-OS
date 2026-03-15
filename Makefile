@@ -35,7 +35,7 @@ INC_FLAGS := $(addprefix -I, $(INC_DIRS))
 
 CFLAGS   := -nostdlib -nostdinc -fno-builtin -fno-stack-protector -mcmodel=medany \
             -march=rv64gc -mabi=lp64d -g $(INC_FLAGS)
-CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -MMD -MP
+CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -MMD -MP -fno-sized-deallocation
 LDFLAGS  := -nostdlib -T $(LINKER_SCRIPT)
 
 QEMU_BASE := qemu-system-riscv64 -M virt -m 128 -nographic -bios none \
@@ -57,6 +57,14 @@ disasm: $(TARGET)
 $(DISK_IMG):
 	@echo "Creating disk image: $(DISK_IMG) ($(DISK_SIZE_MB) MB)"
 	@dd if=/dev/zero of=$(DISK_IMG) bs=1M count=$(DISK_SIZE_MB) 2>/dev/null
+	@mkfs.ext2 -b 1024 -L "kfs" $(DISK_IMG)
+	@mkdir -p /tmp/kfs_mnt
+	@sudo mount -o loop $(DISK_IMG) /tmp/kfs_mnt
+	@echo "hello kernel" | sudo tee /tmp/kfs_mnt/test.txt > /dev/null
+	@sudo mkdir -p /tmp/kfs_mnt/subdir
+	@echo "world" | sudo tee /tmp/kfs_mnt/subdir/foo.txt > /dev/null
+	@sudo umount /tmp/kfs_mnt
+	@echo "Disk image ready"
 
 disk-img: $(DISK_IMG)
 

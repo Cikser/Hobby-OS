@@ -118,7 +118,7 @@ VfsInode* Vfs::resolvePath(const char* path) {
 
         DirEntry entry;
         bool found = false;
-        for (uint32_t i = 0; current->readdir(i, &entry) > 0; i++) {
+        for (uint32_t i = 0; current->readdir(i, &entry) == 0; i++) {
             if (strcmp(entry.name, component) == 0) {
                 m_mount->putInode(current);
                 current = m_mount->getInode(entry.inodeNum);

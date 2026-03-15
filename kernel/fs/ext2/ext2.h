@@ -31,6 +31,7 @@ public:
 
 private:
     uint32_t blockMap(uint32_t logical) const;
+    uint32_t blockMapAlloc(uint32_t logical);
 
     static KMemCache<Ext2Inode>* s_cache;
 
@@ -50,22 +51,22 @@ public:
     VfsInode* create(VfsInode* parent, const char* path) override;
     int unlink(VfsInode* parent, const char* path) override;
 
+private:
+    friend class Ext2Inode;
     void readBlock(uint32_t block, void* buf) const;
     void writeBlock(uint32_t block, const void* buf) const;
-
     uint32_t blockSize() const { return m_blockSize; }
     uint32_t sectorsPerBlock() const { return m_blockSize / Disk::SECTOR_SIZE; }
-
-    Ext2SuperBlock m_sb;
-
-private:
     Ext2BlockGroupDesc readGroupDesc(uint32_t group) const;
     void writeGroupDesc(uint32_t group, const Ext2BlockGroupDesc& desc) const;
     Ext2InodeDisk readRawInode(uint32_t num) const;
     void writeRawInode(uint32_t num, const Ext2InodeDisk& raw) const;
+    uint32_t allocBlock(uint32_t preferGroup);
+    void freeBlock(uint32_t block);
 
     static KMemCache<Ext2Mount>* s_cache;
 
+    Ext2SuperBlock m_sb;
     uint32_t m_blockSize;
     uint32_t m_groupCount;
 };

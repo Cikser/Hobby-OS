@@ -24,6 +24,7 @@ protected:
     void setObjSize(const uint64_t objSize);
 
     static MemCache s_metaCache;
+    static MemCache s_memCache;
 };
 
 class KBufCache : public MemCache {
@@ -40,6 +41,9 @@ class KMemCache : public MemCache {
 
 public:
     KMemCache() : MemCache(sizeof(T)) {}
+
+    void* operator new(size_t size) { return s_memCache.alloc(); }
+    void operator delete(void *obj) { s_memCache.free(obj); }
 };
 
 #endif //RISC_V_KMEM_CACHE_H

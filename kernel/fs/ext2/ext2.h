@@ -43,14 +43,6 @@ class Ext2Mount : public VfsMount {
 public:
     Ext2Mount();
 
-    void* operator new(size_t size) {
-        if (!s_cache) {
-            s_cache = new KMemCache<Ext2Mount>();
-        }
-        return s_cache->alloc();
-    }
-    void operator delete(void* ptr) { s_cache->free(ptr); }
-
     VfsInode* getRoot() override;
     VfsInode* getInode(uint32_t num) override;
     void putInode(VfsInode* inode) override;

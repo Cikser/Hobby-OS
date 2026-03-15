@@ -11,6 +11,7 @@ void MemoryAllocator::init() {
         m_smb[i].setObjSize(1 << (SMB_START_POW + i));
     }
     MemCache::s_metaCache.setObjSize(sizeof(Slab));
+    MemCache::s_memCache.setObjSize(sizeof(MemCache));
     Console::kprintf("MemoryAllocator initialized\n");
 }
 

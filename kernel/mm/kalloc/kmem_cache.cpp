@@ -3,6 +3,7 @@
 #include "../../hw/memlayout.h"
 
 MemCache MemCache::s_metaCache(sizeof(Slab));
+MemCache MemCache::s_memCache(sizeof(MemCache));
 
 MemCache::MemCache(const uint64_t objSize) : m_full(nullptr), m_empty(nullptr),
                                             m_partial(nullptr), m_objSize(objSize) {

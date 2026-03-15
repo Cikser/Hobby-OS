@@ -5,7 +5,6 @@
 #include "../../mm/kalloc/buddy.h"
 
 KMemCache<Ext2Inode> *Ext2Inode::s_cache = nullptr;
-KMemCache<Ext2Mount> *Ext2Mount::s_cache = nullptr;
 
 static constexpr uint32_t BLOCK_BUF_SIZE = 4096;
 

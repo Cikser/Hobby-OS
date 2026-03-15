@@ -17,7 +17,7 @@ public:
     }
     void operator delete(void* ptr) { s_cache->free(ptr); }
 
-    int read(void* buf, uint64_t len) const;
+    int read(void* buf, uint64_t len);
     int write(const void* buf, uint64_t len);
     int seek(uint64_t offset);
     uint64_t tell() const;

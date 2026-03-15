@@ -164,6 +164,157 @@ void Ext2Mount::freeBlock(uint32_t block) {
     Disk::write(3, (uint8_t*)&m_sb + Disk::SECTOR_SIZE);
 }
 
+uint32_t Ext2Mount::allocInode(uint32_t preferGroup, bool isDir) {
+    for (uint32_t g = 0; g < m_groupCount; g++) {
+        uint32_t group = (preferGroup + g) % m_groupCount;
+        Ext2BlockGroupDesc desc = readGroupDesc(group);
+        if (desc.bg_free_inodes_count == 0) continue;
+
+        BlockBuf bitmap;
+        readBlock(desc.bg_inode_bitmap, bitmap.buf);
+        for (uint32_t i = 0; i < m_sb.s_inodes_per_group; i++) {
+            if (bitmap.buf[i / 8] & (1 << (i % 8))) continue;
+
+            bitmap.buf[i / 8] |= 1 << (i % 8);
+            writeBlock(desc.bg_inode_bitmap, bitmap.buf);
+            desc.bg_free_inodes_count--;
+            writeGroupDesc(group, desc);
+            m_sb.s_free_inodes_count--;
+            Disk::write(2, &m_sb);
+            Disk::write(3, (uint8_t*)&m_sb + Disk::SECTOR_SIZE);
+
+            uint32_t num = m_sb.s_inodes_per_group * group + i + 1;
+            Ext2InodeDisk raw = {};
+            writeRawInode(num, raw);
+            return num;
+        }
+    }
+    return 0;
+}
+
+void Ext2Mount::freeInode(uint32_t num) {
+    uint32_t group = (num - 1) / m_sb.s_inodes_per_group;
+    uint32_t index = (num - 1) % m_sb.s_inodes_per_group;
+
+    Ext2BlockGroupDesc desc = readGroupDesc(group);
+    BlockBuf bitmap;
+    readBlock(desc.bg_inode_bitmap, bitmap.buf);
+
+    bitmap.buf[index / 8] &= ~(1 << (index % 8));
+    writeBlock(desc.bg_inode_bitmap, bitmap.buf);
+    desc.bg_free_inodes_count--;
+    writeGroupDesc(group, desc);
+    m_sb.s_free_inodes_count--;
+    Disk::write(2, &m_sb);
+    Disk::write(3, (uint8_t*)&m_sb + Disk::SECTOR_SIZE);
+}
+
+int Ext2Mount::addDirEntry(Ext2Inode* dir, uint32_t inodeNum, const char* name, uint8_t fileType) const {
+    DirEntry tmp;
+    for (uint32_t i = 0; dir->readdir(i, &tmp) == 0; i++) {
+        if (strcmp(tmp.name, name) == 0) return -1;
+    }
+    uint8_t nameLen = strlen(name);
+
+    uint16_t neededLen = 8 + nameLen;
+    if (neededLen % 4) neededLen += 4 - (neededLen % 4);
+
+    uint32_t blockSize = m_blockSize;
+    BlockBuf buf;
+
+    uint64_t fileSize = dir->size();
+    for (uint32_t fileOff = 0; fileOff < fileSize; fileOff += blockSize) {
+        uint32_t logical = fileOff / blockSize;
+        uint32_t physical = dir->blockMap(logical);
+        if (!physical) continue;
+
+        readBlock(physical, buf.buf);
+
+        uint32_t blockOff = 0;
+        while (blockOff < blockSize) {
+            auto entry = (Ext2DirEntry*)(buf.buf + blockOff);
+            if (entry->rec_len == 0) break;
+
+            uint16_t actualLen = 8 + entry->name_len;
+            if (actualLen % 4) actualLen += 4 - (actualLen % 4);
+            uint16_t freeSpace = entry->rec_len - actualLen;
+
+            if (entry->inode == 0) {
+                freeSpace = entry->rec_len;
+                actualLen = 0;
+            }
+
+            if (freeSpace >= neededLen) {
+                if (actualLen > 0) {
+                    entry->rec_len = actualLen;
+                    blockOff += actualLen;
+                }
+                auto newEntry = (Ext2DirEntry*)(buf.buf + blockOff);
+                newEntry->inode = inodeNum;
+                newEntry->name_len = nameLen;
+                newEntry->rec_len = freeSpace;
+                newEntry->file_type = fileType;
+                memcpy(newEntry->name, name, nameLen);
+                writeBlock(physical, buf.buf);
+                return 0;
+            }
+            blockOff += entry->rec_len;
+        }
+    }
+
+    uint32_t newPhysical = dir->blockMapAlloc(fileSize / blockSize);
+    if (!newPhysical) return -1;
+
+    memset(buf.buf, 0, blockSize);
+    auto newEntry = (Ext2DirEntry*)(buf.buf);
+    newEntry->inode = inodeNum;
+    newEntry->name_len = nameLen;
+    newEntry->rec_len = blockSize;
+    newEntry->file_type = fileType;
+    memcpy(newEntry->name, name, nameLen);
+    writeBlock(newPhysical, buf.buf);
+
+    Ext2InodeDisk raw = readRawInode(dir->inodeNum());
+    raw.i_size += blockSize;
+    writeRawInode(dir->inodeNum(), raw);
+    return 0;
+}
+
+int Ext2Mount::removeDirEntry(Ext2Inode* dir, const char* name) {
+    uint32_t blockSize = m_blockSize;
+    BlockBuf buf;
+    uint64_t fileSize = dir->size();
+
+    for (uint64_t fileOff = 0; fileOff < fileSize; fileOff += blockSize) {
+        uint32_t logical = fileOff / blockSize;
+        uint32_t physical = dir->blockMap(logical);
+        if (!physical) return -1;
+
+        readBlock(physical, buf.buf);
+
+        uint32_t blockOff = 0;
+        Ext2DirEntry* prev = nullptr;
+        while (blockOff < blockSize) {
+            auto entry = (Ext2DirEntry*)(buf.buf + blockOff);
+            if (entry->rec_len == 0) break;
+
+            if (entry->inode != 0 &&
+                entry->name_len == strlen(name) &&
+                memcmp(entry->name, name, entry->name_len) == 0) {
+                if (prev)
+                    prev->rec_len = entry->rec_len;
+                else
+                    entry->inode = 0;
+                writeBlock(physical, buf.buf);
+                return 0;
+            }
+            prev = entry;
+            blockOff += entry->rec_len;
+        }
+    }
+    return -1;
+}
+
 VfsInode* Ext2Mount::getRoot() {
     return getInode(EXT2_ROOT_INODE);
 }
@@ -177,17 +328,108 @@ void Ext2Mount::putInode(VfsInode* inode) {
 }
 
 VfsInode* Ext2Mount::create(VfsInode* parent, const char* path) {
-    return nullptr;
+    auto dir = (Ext2Inode*)parent;
+    uint32_t group = (dir->inodeNum() - 1) / m_sb.s_inodes_per_group;
+
+    uint32_t num = allocInode(group, false);
+    if (!num) return nullptr;
+
+    Ext2InodeDisk raw = readRawInode(num);
+    raw.i_mode = EXT2_S_IFREG | 0644;
+    raw.i_links_count = 1;
+    raw.i_size = 0;
+    writeRawInode(num, raw);
+
+    if (addDirEntry(dir, num, path, EXT2_FT_REG) < 0) {
+        freeInode(num);
+        return nullptr;
+    }
+
+    return new Ext2Inode(this, num, raw);
 }
 
 int Ext2Mount::mkdir(VfsInode* parent, const char* path) {
-    return -1;
+    auto dir = (Ext2Inode*)parent;
+    uint32_t group = (dir->inodeNum() - 1) / m_sb.s_inodes_per_group;
+
+    uint32_t num = allocInode(group, true);
+    if (!num) return -1;
+
+    uint32_t block = allocBlock(group);
+    if (!block) {
+        freeInode(num);
+        return -1;
+    }
+
+    Ext2InodeDisk raw = {};
+    raw.i_mode = EXT2_S_IFDIR | 0755;
+    raw.i_links_count = 1;
+    raw.i_size = 0;
+    raw.i_blocks = sectorsPerBlock();
+    raw.i_block[0] = block;
+    writeRawInode(num, raw);
+
+    BlockBuf buf;
+    memset(buf.buf, 0, m_blockSize);
+
+    auto dot = (Ext2DirEntry*)(buf.buf);
+    dot->inode = num;
+    dot->name_len = 1;
+    dot->rec_len = 12;
+    dot->file_type = EXT2_FT_DIR;
+    dot->name[0] = '.';
+
+    auto dotdot = (Ext2DirEntry*)(buf.buf + 12);
+    dotdot->inode     = dir->inodeNum();
+    dotdot->name_len  = 2;
+    dotdot->file_type = EXT2_FT_DIR;
+    dotdot->name[0]   = '.';
+    dotdot->name[1]   = '.';
+    dotdot->rec_len   = m_blockSize - 12;
+
+    writeBlock(block, buf.buf);
+
+    if (addDirEntry(dir, num, path, EXT2_FT_DIR) < 0) {
+        freeInode(num);
+        freeBlock(block);
+        return -1;
+    }
+
+    Ext2InodeDisk parentRaw = readRawInode(dir->inodeNum());
+    parentRaw.i_links_count++;
+    writeRawInode(dir->inodeNum(), parentRaw);
+    return 0;
 }
 
 int Ext2Mount::unlink(VfsInode* parent, const char* path) {
-    return -1;
-}
+    auto dir = (Ext2Inode*)parent;
 
+    DirEntry entry;
+    bool found = false;
+    for (uint32_t i = 0; dir->readdir(i, &entry) == 0; i++) {
+        if (strcmp(entry.name, path) == 0) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) return -1;
+
+    Ext2InodeDisk raw = readRawInode(dir->inodeNum());
+    raw.i_links_count--;
+    if (raw.i_links_count == 0) {
+        Ext2Inode* inode = (Ext2Inode*)getInode(entry.inodeNum);
+        uint32_t totalBlocks = (raw.i_size + m_blockSize - 1) / m_blockSize;
+        for (uint32_t i = 0; i < totalBlocks; i++) {
+            if (uint32_t block = inode->blockMap(i)) freeBlock(block);
+        }
+        putInode(inode);
+        freeInode(entry.inodeNum);
+    }
+    else {
+        writeRawInode(dir->inodeNum(), raw);
+    }
+    return removeDirEntry(dir, path);
+}
 
 uint32_t Ext2Inode::blockMap(uint32_t logical) const {
     uint32_t blockSize = m_mount->blockSize();
@@ -264,7 +506,77 @@ uint32_t Ext2Inode::blockMapAlloc(uint32_t logical) {
         }
         return buf[logical];
     }
+    logical -= ptrsPerBlock;
 
+    if (logical < ptrsPerBlock * ptrsPerBlock) {
+        if (!m_raw.i_block[13]) {
+            m_raw.i_block[13] = m_mount->allocBlock(group);
+            if (!m_raw.i_block[13]) return 0;
+            m_mount->writeRawInode(m_num, m_raw);
+        }
+
+        uint32_t l1buf[ptrsPerBlock];
+        m_mount->readBlock(m_raw.i_block[13], l1buf);
+
+        uint32_t l1idx = logical / ptrsPerBlock;
+        if (!l1buf[l1idx]) {
+            l1buf[l1idx] = m_mount->allocBlock(group);
+            if (!l1buf[l1idx]) return 0;
+            m_mount->writeBlock(m_raw.i_block[13], l1buf);
+        }
+
+        uint32_t l2buf[ptrsPerBlock];
+        m_mount->readBlock(l1buf[l1idx], l2buf);
+
+        uint32_t l2idx = logical % ptrsPerBlock;
+        if (!l2buf[l2idx]) {
+            l2buf[l2idx] = m_mount->allocBlock(group);
+            if (!l2buf[l2idx]) return 0;
+            m_mount->writeBlock(l1buf[l1idx], l2buf);
+        }
+        return l2buf[l2idx];
+    }
+    logical -= ptrsPerBlock * ptrsPerBlock;
+
+    uint32_t ptrs2 = ptrsPerBlock * ptrsPerBlock;
+    if (logical < ptrsPerBlock * ptrs2) {
+        if (!m_raw.i_block[14]) {
+            m_raw.i_block[14] = m_mount->allocBlock(group);
+            if (!m_raw.i_block[14]) return 0;
+            m_mount->writeRawInode(m_num, m_raw);
+        }
+
+        uint32_t l1buf[ptrsPerBlock];
+        m_mount->readBlock(m_raw.i_block[14], l1buf);
+
+        uint32_t l1idx = logical / ptrs2;
+        if (!l1buf[l1idx]) {
+            l1buf[l1idx] = m_mount->allocBlock(group);
+            if (!l1buf[l1idx]) return 0;
+            m_mount->writeBlock(m_raw.i_block[14], l1buf);
+        }
+
+        uint32_t l2buf[ptrsPerBlock];
+        m_mount->readBlock(l1buf[l1idx], l2buf);
+
+        uint32_t l2idx = (logical % ptrs2) / ptrsPerBlock;
+        if (!l2buf[l2idx]) {
+            l2buf[l2idx] = m_mount->allocBlock(group);
+            if (!l2buf[l2idx]) return 0;
+            m_mount->writeBlock(l1buf[l1idx], l2buf);
+        }
+
+        uint32_t l3buf[ptrsPerBlock];
+        m_mount->readBlock(l2buf[l2idx], l3buf);
+
+        uint32_t l3idx = logical % ptrsPerBlock;
+        if (!l3buf[l3idx]) {
+            l3buf[l3idx] = m_mount->allocBlock(group);
+            if (!l3buf[l3idx]) return 0;
+            m_mount->writeBlock(l2buf[l2idx], l3buf);
+        }
+        return l3buf[l3idx];
+    }
     return 0;
 }
 
@@ -292,6 +604,7 @@ int Ext2Inode::stat(InodeStat* out) {
 int Ext2Inode::read(uint64_t offset, void* buf, uint64_t len) {
     if (!buf || len == 0) return -1;
     if (offset >= m_raw.i_size) return -1;
+    if (isDir()) return -1;
     if (offset + len > m_raw.i_size)
         len = m_raw.i_size - offset;
 

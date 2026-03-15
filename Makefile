@@ -60,9 +60,11 @@ $(DISK_IMG):
 	@mkfs.ext2 -b 1024 -L "kfs" $(DISK_IMG)
 	@mkdir -p /tmp/kfs_mnt
 	@sudo mount -o loop $(DISK_IMG) /tmp/kfs_mnt
-	@echo "hello kernel" | sudo tee /tmp/kfs_mnt/test.txt > /dev/null
+	@echo "hello kernel" | sudo tee /tmp/kfs_mnt/readme.txt    > /dev/null
+	@echo "writeable"    | sudo tee /tmp/kfs_mnt/writable.txt  > /dev/null
 	@sudo mkdir -p /tmp/kfs_mnt/subdir
-	@echo "world" | sudo tee /tmp/kfs_mnt/subdir/foo.txt > /dev/null
+	@echo "nested file"  | sudo tee /tmp/kfs_mnt/subdir/nested.txt > /dev/null
+	@python3 -c "print('x' * 5000, end='')" | sudo tee /tmp/kfs_mnt/large.txt > /dev/null
 	@sudo umount /tmp/kfs_mnt
 	@echo "Disk image ready"
 

@@ -4,8 +4,9 @@
 #include "vfs_inode.h"
 #include "file.h"
 
-class Vfs {
+class VFS {
 public:
+    static void init();
     static void mount(VfsMount* mount);
     static File* open(const char* path, uint32_t flags);
     static int mkdir(const char* path);

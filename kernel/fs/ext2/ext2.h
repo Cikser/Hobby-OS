@@ -28,8 +28,10 @@ public:
     bool isDir() override;
     uint64_t size() override;
     int stat(InodeStat* out) override;
+    uint32_t inodeNum() const { return m_num; }
 
 private:
+    friend class Ext2Mount;
     uint32_t blockMap(uint32_t logical) const;
     uint32_t blockMapAlloc(uint32_t logical);
 
@@ -63,6 +65,10 @@ private:
     void writeRawInode(uint32_t num, const Ext2InodeDisk& raw) const;
     uint32_t allocBlock(uint32_t preferGroup);
     void freeBlock(uint32_t block);
+    uint32_t allocInode(uint32_t preferGroup, bool isDir);
+    void freeInode(uint32_t num);
+    int addDirEntry(Ext2Inode* dir, uint32_t inodeNum, const char* name, uint8_t fileType) const;
+    int removeDirEntry(Ext2Inode* dir, const char* name);
 
     static KMemCache<Ext2Mount>* s_cache;
 

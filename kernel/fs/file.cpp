@@ -2,11 +2,12 @@
 
 KMemCache<File>* File::s_cache = new KMemCache<File>();
 
-int File::read(void* buf, uint64_t len) const {
+int File::read(void* buf, uint64_t len) {
     if (!(m_flags & O_RDONLY)) return -1;
     if (!m_inode) return -1;
 
     int n = m_inode->read(m_offset, buf, len);
+    m_offset += n;
     return n;
 }
 

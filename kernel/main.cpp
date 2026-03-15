@@ -1,3 +1,5 @@
+#include "fstest.h"
+#include "fs/vfs.h"
 #include "mm/kalloc/kalloc.h"
 #include "hw/riscv.h"
 #include "io/disk/disk.h"
@@ -12,12 +14,14 @@ extern "C" void start() {
 
 void runTests() {
 	MemTest::run();
-	DiskTest::run();
+	//DiskTest::run();
+	FsTest::run();
 }
 
 int main() {
 	MemoryAllocator::init();
 	Disk::init();
+	VFS::init();
 	runTests();
 	RiscV::stopEmulation();
 }

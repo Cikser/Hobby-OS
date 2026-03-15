@@ -1,13 +1,18 @@
 #include "vfs.h"
 #include "../mm/mem.h"
+#include "ext2/ext2.h"
 
-VfsMount* Vfs::m_mount = nullptr;
+VfsMount* VFS::m_mount = nullptr;
 
-void Vfs::mount(VfsMount* mount) {
+void VFS::init() {
+    mount(new Ext2Mount());
+}
+
+void VFS::mount(VfsMount* mount) {
     m_mount = mount;
 }
 
-File* Vfs::open(const char* path, uint32_t flags) {
+File* VFS::open(const char* path, uint32_t flags) {
     if (!m_mount) return nullptr;
 
     VfsInode* inode = resolvePath(path);
@@ -27,7 +32,7 @@ File* Vfs::open(const char* path, uint32_t flags) {
     return new File(inode, m_mount, flags);
 }
 
-int Vfs::mkdir(const char* path) {
+int VFS::mkdir(const char* path) {
     if (!m_mount) return -1;
 
     const char* name = nullptr;
@@ -48,7 +53,7 @@ int Vfs::mkdir(const char* path) {
     return ret;
 }
 
-int Vfs::create(const char* path) {
+int VFS::create(const char* path) {
     if (!m_mount) return -1;
 
     const char* name = nullptr;
@@ -74,7 +79,7 @@ int Vfs::create(const char* path) {
     return 0;
 }
 
-int Vfs::unlink(const char* path) {
+int VFS::unlink(const char* path) {
     if (!m_mount) return -1;
 
     const char* name = nullptr;
@@ -94,7 +99,7 @@ int Vfs::unlink(const char* path) {
     return ret;
 }
 
-VfsInode* Vfs::resolvePath(const char* path) {
+VfsInode* VFS::resolvePath(const char* path) {
     if (!m_mount) return nullptr;
     if (path[0] != '/') return nullptr;
 
@@ -136,7 +141,7 @@ VfsInode* Vfs::resolvePath(const char* path) {
     return current;
 }
 
-VfsInode* Vfs::resolveParent(const char* path, const char** outName) {
+VfsInode* VFS::resolveParent(const char* path, const char** outName) {
     if (!m_mount) return nullptr;
     if (path[0] != '/') return nullptr;
 

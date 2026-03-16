@@ -4,6 +4,7 @@
 #include "hw/riscv.h"
 #include "io/disk/disk.h"
 #include "test/memtest.h"
+#include "trap/trap.h"
 #include "vm/vm.h"
 
 int main();
@@ -20,6 +21,7 @@ void runTests() {
 }
 
 int main() {
+    TrapHandler::init();
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();

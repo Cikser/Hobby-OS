@@ -23,6 +23,14 @@ void MemoryAllocator::kfreePage(void *ptr) {
     Buddy::free(ptr, MemoryLayout::PAGE_SIZE);
 }
 
+void* MemoryAllocator::kallocPages(uint32_t count) {
+    return Buddy::alloc(count * MemoryLayout::PAGE_SIZE);
+}
+
+void MemoryAllocator::kfreePages(void* ptr, uint32_t count) {
+    Buddy::free(ptr, count * MemoryLayout::PAGE_SIZE);
+}
+
 void *MemoryAllocator::kmalloc(size_t size) {
     if (size == 0) return nullptr;
     if (size > 1 << (SMB_START_POW + SMB_SIZE - 1))

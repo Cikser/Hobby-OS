@@ -11,6 +11,8 @@ public:
 
     static void* kallocPage();
     static void kfreePage(void* ptr);
+    static void* kallocPages(uint32_t count);
+    static void kfreePages(void* ptr, uint32_t count);
 
     static void* kmalloc(size_t size);
     static void kfree(void* ptr);

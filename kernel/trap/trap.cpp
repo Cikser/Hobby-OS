@@ -2,6 +2,7 @@
 
 #include "../hw/riscv.h"
 #include "../io/console/console.h"
+#include "../proc/pcb.h"
 
 void TrapHandler::init() {
     RiscV::w_stvec((uint64_t)&trap);
@@ -31,7 +32,7 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             trapFrame->sepc += 4;
         }*/
         case TIMER_INTERRUPT: {
-            Console::kprintf("tick\n");
+            PCB::dispatch();
             break;
         }
         /*case EXTERNAL_INTERRUPT: {

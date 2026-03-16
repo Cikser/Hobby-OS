@@ -76,6 +76,14 @@ uint64_t PMT::translate(uint64_t va) {
 }
 
 void PMT::activate() const {
-    uint64_t pa = MemoryLayout::v2p((uint64_t)m_entries);
+    uint64_t addr = (uint64_t)m_entries;
+    uint64_t pa;
+
+    if (addr >= MemoryLayout::PHYS_BASE && addr < MemoryLayout::PHYS_END) {
+        pa = addr;
+    } else {
+        pa = MemoryLayout::v2p(addr);
+    }
+
     RiscV::loadSatp(pa);
 }

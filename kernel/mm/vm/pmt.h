@@ -24,8 +24,6 @@ public:
     uint64_t translate(uint64_t va);
     void activate() const;
 
-private:
-    friend class VM;
     static constexpr uint64_t PAGE_V = (1ULL << 0);
     static constexpr uint64_t PAGE_R = (1ULL << 1);
     static constexpr uint64_t PAGE_W = (1ULL << 2);
@@ -35,10 +33,13 @@ private:
     static constexpr uint64_t PAGE_A = (1ULL << 6);
     static constexpr uint64_t PAGE_D = (1ULL << 7);
 
-    static constexpr uint64_t PAGE_KERN   = PAGE_V | PAGE_R | PAGE_W | PAGE_G | PAGE_A | PAGE_D;
+    static constexpr uint64_t PAGE_KERN = PAGE_V | PAGE_R | PAGE_W | PAGE_G | PAGE_A | PAGE_D;
     static constexpr uint64_t PAGE_KERN_X = PAGE_KERN | PAGE_X;
-    static constexpr uint64_t PAGE_MMIO   = PAGE_V | PAGE_R | PAGE_W | PAGE_G | PAGE_A | PAGE_D;
-    static constexpr uint64_t PAGE_USER   = PAGE_V | PAGE_R | PAGE_W | PAGE_U | PAGE_A | PAGE_D;
+    static constexpr uint64_t PAGE_MMIO = PAGE_V | PAGE_R | PAGE_W | PAGE_G | PAGE_A | PAGE_D;
+    static constexpr uint64_t PAGE_USER = PAGE_V | PAGE_R | PAGE_W | PAGE_U | PAGE_A | PAGE_D;
+
+private:
+    friend class VM;
 
     static constexpr uint64_t KERNEL_PHYS = 0x80000000ULL;
     static constexpr uint64_t KERNEL_VIRT = 0xFFFFFFC080000000ULL;

@@ -12,7 +12,7 @@ public:
     static void destroyPMT(const PMT* pmt);
 
 private:
-
+    friend class Thread;
     alignas(4096) static uint64_t s_bootPmt[512];
 
     static constexpr uint64_t level2Index(uint64_t va);

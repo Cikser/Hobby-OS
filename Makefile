@@ -1,7 +1,7 @@
 ARCH := riscv64-unknown-elf
 CC := $(ARCH)-gcc
 CXX := $(ARCH)-g++
-LD := $(ARCH)-ld
+LD := $(ARCH)-gcc
 OBJCOPY := $(ARCH)-objcopy
 OBJDUMP := $(ARCH)-objdump
 GDB := gdb-multiarch
@@ -36,7 +36,9 @@ INC_FLAGS := $(addprefix -I, $(INC_DIRS))
 CFLAGS   := -nostdlib -nostdinc -fno-builtin -fno-stack-protector -mcmodel=medany \
             -march=rv64gc -mabi=lp64d -g $(INC_FLAGS)
 CXXFLAGS := $(CFLAGS) -fno-exceptions -fno-rtti -MMD -MP -fno-sized-deallocation
-LDFLAGS  := -nostdlib -T $(LINKER_SCRIPT)
+LDFLAGS  := -nostdlib -T $(LINKER_SCRIPT) -mcmodel=medany \
+                       -march=rv64gc -mabi=lp64d \
+                       -Wl,--no-warn-rwx-segments
 
 QEMU_BASE := qemu-system-riscv64 -M virt -m 128 -nographic -bios none \
              -global virtio-mmio.force-legacy=false \

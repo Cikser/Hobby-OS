@@ -1,14 +1,15 @@
-#include "fstest.h"
+#include "test/fstest.h"
 #include "fs/vfs.h"
 #include "mm/kalloc/kalloc.h"
 #include "hw/riscv.h"
 #include "io/disk/disk.h"
 #include "test/memtest.h"
-#include "test/disktest.h"
+#include "vm/vm.h"
 
 int main();
 
 extern "C" void start() {
+    VM::init();
 	RiscV::init(main);
 }
 

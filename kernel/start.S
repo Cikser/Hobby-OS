@@ -1,13 +1,22 @@
 .equ STACK_SIZE, 8192
 
+.section .text.init
 .global _start
 
 _start:
-    la   sp, stacks + STACK_SIZE    
-    call start
-    li t0, 0x100000
-    li t1, 0x5555
-    sw t1, (t0)
+    csrr t0, mhartid
+    bnez t0, .halt
+    csrw sie, zero
 
-stacks:
+    la   sp, boot_stack_top
+    call start
+
+.halt:
+    wfi
+    j .halt
+
+.section .bss
+.align 12
+boot_stack:
     .skip STACK_SIZE
+boot_stack_top:

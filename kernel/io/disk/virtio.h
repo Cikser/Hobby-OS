@@ -2,8 +2,9 @@
 #define RISC_V_VIRTIO_H
 
 #include "../../types.h"
+#include "../../hw/memlayout.h"
 
-static constexpr uint64_t VIRTIO_BASE = 0X10001000;
+static constexpr uint64_t VIRTIO_BASE = MemoryLayout::VIRTIO_BASE;
 static constexpr uint32_t VIRTIO_MAGIC = 0X000;
 static constexpr uint32_t VIRTIO_MAGIC_VALUE = 0x74726976;
 static constexpr uint32_t VIRTIO_VERSION = 0X004;

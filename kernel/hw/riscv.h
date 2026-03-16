@@ -2,6 +2,7 @@
 #define RISC_V_RISC_V_H
 
 #include "../types.h"
+#include "mm/vm/vm.h"
 
 class RiscV{
 
@@ -24,9 +25,7 @@ public:
     static void w_sie(uint64_t value);
 
     static void stopEmulation(){
-        __asm__ volatile("li t0, 0x100000");
-        __asm__ volatile("li t1, 0x5555");
-        __asm__ volatile("sw t1, 0(t0)");
+        *(volatile uint32_t*)(MemoryLayout::MMIO_BASE + 0x100000ULL) = 0x5555;
         while(true){}
     }
 
@@ -51,23 +50,22 @@ private:
 };
 
 inline void RiscV::init(int (*main)()) {
-    unsigned long mstatus;
+    uint64_t mstatus;
     __asm__ volatile("csrr %0, mstatus" : "=r"(mstatus));
-    mstatus &= ~(3 << 11);
-    mstatus |= (1 << 11);
+    mstatus &= ~(3ULL << 11);
+    mstatus |=  (1ULL << 11);
+    mstatus &= ~(1ULL << 5);
+    mstatus &= ~(1ULL << 1);
     __asm__ volatile("csrw mstatus, %0" ::"r"(mstatus));
 
-    __asm__ volatile("csrw mepc, %0" ::"r"((uint64_t)main));
+    __asm__ volatile("csrw mepc, %0"    ::"r"((uint64_t)main));
+    __asm__ volatile("csrw medeleg, %0" ::"r"(0xffffULL));
+    __asm__ volatile("csrw mideleg, %0" ::"r"(0xffffULL));
 
-    __asm__ volatile("csrw satp, zero");
+    __asm__ volatile("csrw sie, zero");
 
-    __asm__ volatile("csrw medeleg, %0" ::"r"(0xffff));
-    __asm__ volatile("csrw mideleg, %0" ::"r"(0xffff));
-
-    w_sie(r_sie() | SIE_SEIE | SIE_STIE);
-
-    __asm__ volatile("csrw pmpaddr0, %0" ::"r"(0x3fffffffffffffull));
-    __asm__ volatile("csrw pmpcfg0, %0" ::"r"(0xf));
+    __asm__ volatile("csrw pmpaddr0, %0" ::"r"(0x3fffffffffffffULL));
+    __asm__ volatile("csrw pmpcfg0, %0"  ::"r"(0xfULL));
 
     asm volatile("mret");
 }

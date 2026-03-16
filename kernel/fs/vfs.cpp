@@ -1,4 +1,6 @@
 #include "vfs.h"
+
+#include "console.h"
 #include "../mm/mem.h"
 #include "ext2/ext2.h"
 
@@ -6,6 +8,7 @@ VfsMount* VFS::m_mount = nullptr;
 
 void VFS::init() {
     mount(new Ext2Mount());
+    Console::kprintf("VFS initialized\n");
 }
 
 void VFS::mount(VfsMount* mount) {

@@ -1,10 +1,9 @@
 #include "console.h"
 #include "../../hw/riscv.h"
-#include "uart.h"
 
 void Console::kputc(const char ch){
-    while ((*(char*)(CONSOLE_STATUS) & CONSOLE_TX_STATUS_BIT) == 0){}
-	*(char*)CONSOLE_TX_DATA = ch;
+    while ((readReg(CONSOLE_STATUS) & CONSOLE_TX_STATUS_BIT) == 0){}
+	writeReg(CONSOLE_TX_DATA, ch);
 }
 
 void Console::kputs(const char* s){
@@ -12,8 +11,8 @@ void Console::kputs(const char* s){
 }
 
 char Console::kgetc(){
-    while ((*(char*)(CONSOLE_STATUS) & CONSOLE_RX_STATUS_BIT) == 0){}
-    return *(char*)(CONSOLE_RX_DATA);
+    while ((readReg(CONSOLE_STATUS) & CONSOLE_RX_STATUS_BIT) == 0){}
+    return readReg(CONSOLE_RX_DATA);
 }
 
 char digits[] = "0123456789ABCDEF";

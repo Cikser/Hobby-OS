@@ -7,6 +7,7 @@ class TrapHandler {
 public:
     static void init();
     static void trap();
+    static void timerTrap();
 
 private:
     static void handleTrap(TrapFrame* trapFrame);
@@ -15,7 +16,7 @@ private:
     static constexpr uint64_t PF_INSTRUCTION = 0x12;
     static constexpr uint64_t PF_LOAD = 0x13;
     static constexpr uint64_t PF_STORE = 0x15;
-    static constexpr uint64_t TIMER_INTERRUPT = 0x8000000000000001;
+    static constexpr uint64_t TIMER_INTERRUPT = 0x8000000000000005;
     static constexpr uint64_t EXTERNAL_INTERRUPT = 0x8000000000000009;
 };
 

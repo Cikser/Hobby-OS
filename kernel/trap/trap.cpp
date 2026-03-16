@@ -5,6 +5,8 @@
 
 void TrapHandler::init() {
     RiscV::w_stvec((uint64_t)&trap);
+    RiscV::ms_sie(RiscV::SIE_SEIE);
+    RiscV::ms_sie(RiscV::SIE_STIE);
 }
 
 void TrapHandler::handleTrap(TrapFrame* trapFrame) {
@@ -27,11 +29,12 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
         }
         case PF_STORE: {
             trapFrame->sepc += 4;
-        }
+        }*/
         case TIMER_INTERRUPT: {
+            Console::kprintf("tick\n");
             break;
         }
-        case EXTERNAL_INTERRUPT: {
+        /*case EXTERNAL_INTERRUPT: {
             break;
         }*/
         default: {

@@ -3,6 +3,7 @@
 
 #include "../types.h"
 #include "mm/vm/vm.h"
+#include "trap/trap.h"
 
 class RiscV{
 
@@ -41,15 +42,22 @@ public:
         SIE_SSIE = 1 << 1
     };
 
-    static void trap();
-
 private:
-    static void trapHandler();
+    static void initTimer();
     static uint64_t makeSatp(uint64_t pmtAddress);
     
 };
 
+inline void RiscV::initTimer() {
+    __asm__ volatile("csrw mtvec, %0" :: "r"((uint64_t)&TrapHandler::timerTrap) : "memory");
+    auto mtime = (volatile uint64_t*)0x200BFF8;
+    auto mtimecmp = (volatile uint64_t*)0x2004000;
+    *mtimecmp = *mtime + 1000000;
+    __asm__ volatile("csrs mie, %0" :: "r"(1ULL << 7) : "memory");
+}
+
 inline void RiscV::init(int (*main)()) {
+    initTimer();
     uint64_t mstatus;
     __asm__ volatile("csrr %0, mstatus" : "=r"(mstatus));
     mstatus &= ~(3ULL << 11);

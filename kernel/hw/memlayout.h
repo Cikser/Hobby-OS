@@ -21,6 +21,11 @@ public:
     static constexpr uint64_t UART_BASE = MMIO_BASE + 0x10000000ULL;
     static constexpr uint64_t VIRTIO_BASE = MMIO_BASE + 0x10001000ULL;
 
+    static constexpr uint64_t CLINT_BASE = MMIO_BASE + 0x2000000ULL;
+    static constexpr uint64_t CLINT_MTIME = MMIO_BASE + 0x200BFF8ULL;
+    static constexpr uint64_t CLINT_MTIMECMP = MMIO_BASE + 0x2004000ULL;
+    static constexpr uint64_t TIMER_INTERVAL = 1000000;
+
     static constexpr uint64_t PAGE_SIZE = 0x1000;
     static constexpr uint32_t PAGE_SHIFT = 12;
     static constexpr uint32_t MEM_LIMIT_SHIFT = 27;

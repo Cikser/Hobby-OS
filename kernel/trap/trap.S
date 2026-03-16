@@ -1,7 +1,7 @@
 .section .text
 .global _ZN11TrapHandler4trapEv
 
-.align 4
+.align 2
 _ZN11TrapHandler4trapEv:
     addi sp, sp, -256
 
@@ -80,3 +80,26 @@ _ZN11TrapHandler4trapEv:
     ld x2,   16(sp)
 
     sret
+
+.global _ZN11TrapHandler9timerTrapEv
+.align 2
+_ZN11TrapHandler9timerTrapEv:
+    csrw mscratch, t0
+    addi sp, sp, -8
+    sd   t1, 0(sp)
+
+    li   t1, 0x200BFF8
+    ld   t1, 0(t1)
+    li   t0, 1000000
+    add  t1, t1, t0
+    li   t0, 0x2004000
+    sd   t1, 0(t0)
+
+    li   t0, (1 << 5)
+    csrrs zero, mip, t0
+
+    ld   t1, 0(sp)
+    addi sp, sp, 8
+    csrr t0, mscratch
+
+    mret

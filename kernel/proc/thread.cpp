@@ -3,7 +3,7 @@
 
 KMemCache<Thread>* Thread::s_cache = nullptr;
 
-Thread::Thread(Process* parent, uint64_t entry) :
+Thread::Thread(Process* parent, uint64_t entry, void* args) :
     PCB(entry, parent->m_pmt),
     m_parent(parent),
     m_nextThread(nullptr)
@@ -20,14 +20,15 @@ Thread::Thread(Process* parent, uint64_t entry) :
     );
 
     m_trapFrame->sp = stackTop;
+    m_args = args;
 }
 
-Thread::Thread(void (*entry)()) :
+Thread::Thread(void (*entry)(void*), void* args) :
     PCB((uint64_t)entry, nullptr, false),
     m_parent(nullptr),
     m_nextThread(nullptr)
 {
-
+    m_args = args;
 }
 
 Thread::~Thread() {

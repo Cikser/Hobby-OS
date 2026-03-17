@@ -71,6 +71,7 @@ protected:
     PCB* m_next;
     bool m_usermode;
     uint64_t m_entry;
+    void* m_args;
 
     static pid_t s_pid;
 };
@@ -95,7 +96,7 @@ public:
     static Process* createInit();
     Process* fork();
     int exec(const char* elfPath);
-    Thread* createThread(void(*entry)());
+    Thread* createThread(void(*entry)(void*));
 
 private:
     friend class Thread;
@@ -109,8 +110,8 @@ private:
 class Thread : public PCB {
 public:
     ~Thread() override;
-    Thread(Process* parent, uint64_t entry);
-    explicit Thread(void (*entry)());
+    Thread(Process* parent, uint64_t entry, void* args = nullptr);
+    explicit Thread(void (*entry)(void*), void* args = nullptr);
 
     void* operator new(size_t size) {
         if (!s_cache) {

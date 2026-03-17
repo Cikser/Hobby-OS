@@ -14,8 +14,9 @@ void runTests() {
 	FsTest::run();
 }
 
-void printPid() {
+void printPid(void* arg) {
 	Console::kprintf("Printing pid: %ld\n", PCB::currentPid());
+	((Semaphore*)arg)->signal();
 }
 
 int main() {
@@ -26,10 +27,9 @@ int main() {
 	auto main = new Thread(nullptr);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
-	auto initProc = Process::createInit();
-	auto t1 = new Thread(printPid);
 
 	Semaphore sem(0);
+	auto t1 = new Thread(printPid, &sem);
 
 	sem.wait();
 	Console::kprintf("After sem\n");

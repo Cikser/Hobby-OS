@@ -14,7 +14,8 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_pmt(pmt),
     m_next(nullptr),
     m_usermode(usermode),
-    m_entry(entry)
+    m_entry(entry),
+    m_args(nullptr)
 {
     if (entry) {
         m_kstack = (uint8_t*)MemoryAllocator::kallocPages(KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
@@ -53,7 +54,7 @@ void PCB::pcbEntry() {
             : "memory"
         );
     } else {
-        ((void(*)())current->m_entry)();
+        ((void(*)(void*))current->m_entry)(current->m_args);
         current->exit();
     }
 }

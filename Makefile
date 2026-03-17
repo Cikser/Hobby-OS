@@ -15,6 +15,7 @@ GDB_PORT := 1234
 
 DISK_IMG := disk.img
 DISK_SIZE_MB := 32
+DISK_BLOCKS_1K := $(shell echo $$(( $(DISK_SIZE_MB) * 1024 )))
 
 STARTUP_SRC := $(KERNEL_DIR)/start.S
 STARTUP_OBJ := $(BUILD_DIR)/start.o
@@ -56,19 +57,22 @@ $(TARGET): $(OBJS)
 disasm: $(TARGET)
 	@$(OBJDUMP) -d $< > $(DISASM_FILE)
 
-$(DISK_IMG):
+$(DISK_IMG): user/init.elf
 	@echo "Creating disk image: $(DISK_IMG) ($(DISK_SIZE_MB) MB)"
-	@dd if=/dev/zero of=$(DISK_IMG) bs=1M count=$(DISK_SIZE_MB) 2>/dev/null
-	@mkfs.ext2 -b 1024 -L "kfs" $(DISK_IMG)
-	@mkdir -p /tmp/kfs_mnt
-	@sudo mount -o loop $(DISK_IMG) /tmp/kfs_mnt
-	@echo "hello kernel" | sudo tee /tmp/kfs_mnt/readme.txt    > /dev/null
-	@echo "writeable"    | sudo tee /tmp/kfs_mnt/writable.txt  > /dev/null
-	@sudo mkdir -p /tmp/kfs_mnt/subdir
-	@echo "nested file"  | sudo tee /tmp/kfs_mnt/subdir/nested.txt > /dev/null
-	@python3 -c "print('x' * 5000, end='')" | sudo tee /tmp/kfs_mnt/large.txt > /dev/null
-	@sudo umount /tmp/kfs_mnt
+	@rm -rf $(BUILD_DIR)/kfs_root
+	@mkdir -p $(BUILD_DIR)/kfs_root/subdir
+	@mkdir -p $(BUILD_DIR)/kfs_root/bin
+	@printf "%s\n" "hello kernel" > $(BUILD_DIR)/kfs_root/readme.txt
+	@printf "%s\n" "writeable"    > $(BUILD_DIR)/kfs_root/writable.txt
+	@printf "%s\n" "nested file"  > $(BUILD_DIR)/kfs_root/subdir/nested.txt
+	@python3 -c "print('x' * 5000, end='')" > $(BUILD_DIR)/kfs_root/large.txt
+	@cp user/init.elf $(BUILD_DIR)/kfs_root/bin/init
+	@dd if=/dev/zero of=$(DISK_IMG) bs=1K count=$(DISK_BLOCKS_1K) 2>/dev/null
+	@mkfs.ext2 -F -b 1024 -d $(BUILD_DIR)/kfs_root -L "kfs" $(DISK_IMG) >/dev/null
 	@echo "Disk image ready"
+
+user/init.elf:
+	@$(MAKE) -C user init.elf
 
 disk-img: $(DISK_IMG)
 

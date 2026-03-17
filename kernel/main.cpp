@@ -21,25 +21,22 @@ void runTests() {
 	FsTest::run();
 }
 
-void threadFunc() {
-    Console::kprintf("hello from thread %ld\n", PCB::s_running->pid());
-    PCB::s_running->exit();
-}
-
 int main() {
     TrapHandler::init();
+	RiscV::ms_sstatus(1 << 18);
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();
-	//runTests();
-    auto* mainPcb = new Thread(nullptr);
+    auto* mainPcb = new Thread([]() { while(true) {} });
     mainPcb->m_state = ProcState::RUNNING;
     PCB::s_running = mainPcb;
 
-    auto* t1 = new Thread(threadFunc);
-    auto* t2 = new Thread(threadFunc);
-    Scheduler::put(t1);
-    Scheduler::put(t2);
+    Process::createInit();
+
     PCB::dispatch();
+    Console::kprintf("back to main\n");
+
+    while (true) {}
+	runTests();
 	RiscV::stopEmulation();
 }

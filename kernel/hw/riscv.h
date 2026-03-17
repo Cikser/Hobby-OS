@@ -18,6 +18,8 @@ public:
     static uint64_t r_sepc();
     static uint64_t r_scause();
     static uint64_t r_stval();
+    static void w_sscratch(uint64_t value);
+    static uint64_t r_sscratch();
     static void ms_sstatus(uint64_t mask);
     static void mc_sstatus(uint64_t mask);
     static void ms_sie(uint64_t mask);
@@ -127,6 +129,16 @@ inline uint64_t RiscV::r_scause(){
 inline uint64_t RiscV::r_stval(){
     uint64_t value;
     __asm__ volatile("csrr %0, stval" : "=r"(value));
+    return value;
+}
+
+inline void RiscV::w_sscratch(uint64_t value) {
+    __asm__ volatile("csrw sscratch, %0" :: "r"(value));
+}
+
+inline uint64_t RiscV::r_sscratch() {
+    uint64_t value;
+    __asm__ volatile("csrr %0, sscratch" : "=r"(value));
     return value;
 }
 

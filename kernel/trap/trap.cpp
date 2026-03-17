@@ -4,8 +4,10 @@
 #include "../io/console/console.h"
 #include "../proc/pcb.h"
 
+extern "C" void _trap_kernel_entry();
+
 void TrapHandler::init() {
-    RiscV::w_stvec((uint64_t)&trap);
+    RiscV::w_stvec((uint64_t)&_trap_kernel_entry);
     RiscV::ms_sie(RiscV::SIE_SEIE);
     RiscV::ms_sie(RiscV::SIE_STIE);
 }
@@ -16,10 +18,13 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
     uint64_t sepc = RiscV::r_sepc();
     uint64_t sstatus = RiscV::r_sstatus();
     switch (scause) {
-        /*case SYSCALL: {
+        case SYSCALL: {
             trapFrame->sepc += 4;
+            if (trapFrame->a7 == 1) {
+                Console::kprintf("Hello world!\n");
+            }
             break;
-        }
+        }/*
         case PF_INSTRUCTION: {
             trapFrame->sepc += 4;
             break;

@@ -9,7 +9,7 @@ PMT::PMT() {
 
 uint64_t* PMT::walk(uint64_t va, bool alloc) {
     uint64_t* table = m_entries;
-    for (int level = 2; level >= 0; level--) {
+    for (int level = 2; level > 0; level--) {
         uint64_t pageNum = (va >> (VPN_SHIFT + level * VPN_WIDTH)) & VPN_MASK;
         uint64_t* pte = table + pageNum;
 

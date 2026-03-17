@@ -1,7 +1,9 @@
 #include "pcb.h"
 #include "scheduler.h"
+#include "../io/console/console.h"
 #include "../mm/mem.h"
 #include "../mm/vm/vm.h"
+#include "elf/elf.h"
 
 Process::Process(PMT* pmt, uint64_t entry) :
     PCB(entry, pmt),
@@ -29,7 +31,12 @@ Process::~Process() {
 Process* Process::createInit() {
     PMT* pmt = VM::createPMT();
     auto proc = new Process(pmt, 0);
-    // todo elf load
+
+    uint64_t entry = ElfLoader::load("/bin/init", pmt);
+    if (!entry) {
+        Console::panic("Process:createInit(): failed to load ELF");
+    }
+    proc->m_entry = entry;
     Scheduler::put(proc);
     return proc;
 }
@@ -45,6 +52,10 @@ Process* Process::fork() {
 }
 
 int Process::exec(const char* elfPath) {
-    // todo elf loader
-    return -1;
+    // todo unmap existing pages
+    uint64_t entry = ElfLoader::load(elfPath, m_pmt);
+    if (!entry) return -1;
+
+    m_entry = entry;
+    return 0;
 }

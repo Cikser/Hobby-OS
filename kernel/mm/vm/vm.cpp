@@ -41,7 +41,7 @@ PMT* VM::createPMT() {
     for (int i = 256; i < 512; i++) {
         pmt->m_entries[i] = s_bootPmt[i];
     }
-
+    pmt->m_entries[2] = s_bootPmt[2];
     return pmt;
 }
 

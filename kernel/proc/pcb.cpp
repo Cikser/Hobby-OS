@@ -25,15 +25,21 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
 }
 
 extern "C" void _trap_restore();
+extern "C" void _trap_user_entry();
+extern "C" void _trap_kernel_entry();
 
 void PCB::pcbEntry() {
     PCB* current = s_running;
 
     if (current->m_usermode) {
+        RiscV::w_sscratch((uint64_t)current->m_kstack + KERNEL_STACK_SIZE);
+        RiscV::w_stvec((uint64_t)&_trap_user_entry);
         RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
+        RiscV::mc_sstatus(RiscV::SSTATUS_SPP);
         RiscV::w_sepc(current->m_entry);
         current->m_trapFrame->sp = USER_STACK_TOP;
-        asm volatile(
+        current->m_trapFrame->sepc = current->m_entry;
+        __asm__ volatile(
             "mv sp, %0\n"
             "j  _trap_restore\n"
             :: "r"(current->m_trapFrame)
@@ -65,6 +71,8 @@ void PCB::dispatch() {
     s_running = next;
     next->m_state = ProcState::RUNNING;
     next->m_pmt->activate();
+    RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
+    RiscV::w_stvec((uint64_t)(next->m_usermode ? &_trap_user_entry : &_trap_kernel_entry));
 
     switchContext(&current->m_context, &next->m_context);
 }

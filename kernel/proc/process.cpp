@@ -5,6 +5,8 @@
 #include "../mm/vm/vm.h"
 #include "elf/elf.h"
 
+KMemCache<Process>* Process::s_cache = nullptr;
+
 Process::Process(PMT* pmt, uint64_t entry) :
     PCB(entry, pmt),
     m_threads(nullptr)
@@ -30,7 +32,7 @@ Process::~Process() {
 
 Process* Process::createInit() {
     PMT* pmt = VM::createPMT();
-    auto proc = new Process(pmt, 0);
+    auto proc = new Process(pmt, -1);
 
     uint64_t entry = ElfLoader::load("/bin/init", pmt);
     if (!entry) {

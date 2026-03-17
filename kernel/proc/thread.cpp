@@ -1,6 +1,8 @@
 #include "pcb.h"
 #include "../mm/vm/vm.h"
 
+KMemCache<Thread>* Thread::s_cache = nullptr;
+
 Thread::Thread(Process* parent, uint64_t entry) :
     PCB(entry, parent->m_pmt),
     m_parent(parent),
@@ -20,14 +22,14 @@ Thread::Thread(Process* parent, uint64_t entry) :
     m_trapFrame->sp = stackTop;
 }
 
-Thread::Thread(void (*entry)())
-    : PCB((uint64_t)entry, (PMT*)&VM::s_bootPmt, false)
-    , m_parent(nullptr)
-    , m_nextThread(nullptr)
+Thread::Thread(void (*entry)()) :
+    PCB((uint64_t)entry, nullptr, false),
+    m_parent(nullptr),
+    m_nextThread(nullptr)
 {
 
 }
 
 Thread::~Thread() {
-    MemoryAllocator::kfreePages(m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+
 }

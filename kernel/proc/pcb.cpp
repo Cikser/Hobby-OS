@@ -16,12 +16,19 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_usermode(usermode),
     m_entry(entry)
 {
-    m_kstack = (uint8_t*)MemoryAllocator::kallocPages(KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-    m_trapFrame = (TrapFrame*)(m_kstack + KERNEL_STACK_SIZE - sizeof(TrapFrame));
-    m_ustack = usermode ? (uint8_t*)MemoryAllocator::kallocPages(USER_STACK_SIZE / MemoryLayout::PAGE_SIZE) : nullptr;
-    memset(&m_context, 0, sizeof(m_context));
-    m_context.ra = (uint64_t)pcbEntry;
-    m_context.sp = (uint64_t)m_trapFrame;
+    if (entry) {
+        m_kstack = (uint8_t*)MemoryAllocator::kallocPages(KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+        m_trapFrame = (TrapFrame*)(m_kstack + KERNEL_STACK_SIZE - sizeof(TrapFrame));
+        m_ustack = usermode ? (uint8_t*)MemoryAllocator::kallocPages(USER_STACK_SIZE / MemoryLayout::PAGE_SIZE) : nullptr;
+        memset(&m_context, 0, sizeof(m_context));
+        m_context.ra = (uint64_t)pcbEntry;
+        m_context.sp = (uint64_t)m_trapFrame;
+        Scheduler::put(this);
+    }
+    else {
+        s_running = this;
+        m_state = ProcState::RUNNING;
+    }
 }
 
 extern "C" void _trap_restore();
@@ -70,7 +77,8 @@ void PCB::dispatch() {
 
     s_running = next;
     next->m_state = ProcState::RUNNING;
-    next->m_pmt->activate();
+    if (next->m_pmt)
+        next->m_pmt->activate();
     RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
     RiscV::w_stvec((uint64_t)(next->m_usermode ? &_trap_user_entry : &_trap_kernel_entry));
 
@@ -78,5 +86,9 @@ void PCB::dispatch() {
 }
 
 PCB::~PCB() {
-
+    MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    if (m_usermode) {
+        MemoryAllocator::kfreePages(
+            (void*)MemoryLayout::v2p((uint64_t)m_ustack), USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    }
 }

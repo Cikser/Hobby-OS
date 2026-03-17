@@ -46,8 +46,9 @@ public:
     pid_t pid() const { return m_pid; }
     ProcState state() const { return m_state; }
     PMT* pmt() const { return m_pmt; }
+    static pid_t currentPid() { return s_running->pid(); }
 
-//protected:
+protected:
     friend class Scheduler;
 
     PCB(uint64_t entry, PMT* pmt, bool usermode = true);
@@ -77,6 +78,17 @@ class Process : public PCB {
 public:
     ~Process() override;
 
+    void* operator new(size_t size) {
+        if (!s_cache) {
+            s_cache = new KMemCache<Process>();
+        }
+        return s_cache->alloc();
+    }
+
+    void operator delete(void* ptr) {
+        s_cache->free(ptr);
+    }
+
     static Process* createInit();
     Process* fork();
     int exec(const char* elfPath);
@@ -84,6 +96,8 @@ public:
 
 private:
     friend class Thread;
+
+    static KMemCache<Process>* s_cache;
 
     Process(PMT* pmt, uint64_t entry);
     Thread* m_threads;
@@ -95,8 +109,21 @@ public:
     Thread(Process* parent, uint64_t entry);
     explicit Thread(void (*entry)());
 
+    void* operator new(size_t size) {
+        if (!s_cache) {
+            s_cache = new KMemCache<Thread>();
+        }
+        return s_cache->alloc();
+    }
+
+    void operator delete(void* ptr) {
+        s_cache->free(ptr);
+    }
+
 private:
     friend class Process;
+
+    static KMemCache<Thread>* s_cache;
 
     Process* m_parent;
     Thread* m_nextThread;

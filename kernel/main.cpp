@@ -13,21 +13,25 @@ void runTests() {
 	FsTest::run();
 }
 
+void printPid() {
+	Console::kprintf("Printing pid: %ld\n", PCB::currentPid());
+}
+
 int main() {
     TrapHandler::init();
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();
-    auto* mainPcb = new Thread([]() { while(true) {} });
-    mainPcb->m_state = ProcState::RUNNING;
-    PCB::s_running = mainPcb;
+	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
+	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
+	RiscV::ms_sie(RiscV::SIE_STIE);
+	RiscV::ms_sie(RiscV::SIE_SEIE);
+    auto main = new Thread(nullptr);
+	auto t1 = new Thread(printPid);
+	auto t2 = new Thread(printPid);
+	auto initProc = Process::createInit();
 
-    Process::createInit();
+	PCB::dispatch();
 
-    PCB::dispatch();
-    Console::kprintf("back to main\n");
-
-    while (true) {}
-	runTests();
 	RiscV::stopEmulation();
 }

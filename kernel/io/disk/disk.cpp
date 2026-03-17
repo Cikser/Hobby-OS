@@ -89,11 +89,11 @@ void Disk::sendRequest(uint64_t sector, void* buf, opType op) {
     m_req[slot].sector = sector;
     m_status[slot] = 0xFF;
 
-    m_desc[d0] = {(uint64_t)&m_req[slot],
+    m_desc[d0] = {MemoryLayout::v2p((uint64_t)&m_req[slot]),
         sizeof(VirtioBlkReqHeader), VIRTQ_DESC_F_NEXT, (uint16_t)d1 };
     m_desc[d1] = {MemoryLayout::v2p((uint64_t)buf),
         512, (uint16_t)(VIRTQ_DESC_F_NEXT | (op == READ ? VIRTQ_DESC_F_WRITE : 0)), (uint16_t)d2 };
-    m_desc[d2] = {(uint64_t)&m_status[slot],
+    m_desc[d2] = {MemoryLayout::v2p((uint64_t)&m_status[slot]),
         1, VIRTQ_DESC_F_WRITE, 0 };
 
     m_avail->ring[m_avail->idx % QUEUE_SIZE] = d0;

@@ -6,14 +6,6 @@
 #include "proc/scheduler.h"
 #include "test/memtest.h"
 #include "trap/trap.h"
-#include "vm/vm.h"
-
-int main();
-
-extern "C" void start() {
-    VM::init();
-	RiscV::init(main);
-}
 
 void runTests() {
 	MemTest::run();
@@ -23,7 +15,6 @@ void runTests() {
 
 int main() {
     TrapHandler::init();
-	RiscV::ms_sstatus(1 << 18);
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();

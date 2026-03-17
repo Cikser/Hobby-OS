@@ -27,6 +27,8 @@ public:
     static uint64_t r_sie();
     static void w_sie(uint64_t value);
 
+    static void sModeEntry() __attribute__((section(".text.init")));
+
     static void stopEmulation(){
         *(volatile uint32_t*)(MemoryLayout::MMIO_BASE + 0x100000ULL) = 0x5555;
         while(true){}

@@ -1,38 +1,39 @@
 #include "vm.h"
-
 #include "pmt.h"
-#include "../../io/console/console.h"
-#include "../../hw/ld.h"
-#include "../../hw/riscv.h"
 #include "../../hw/memlayout.h"
 
 alignas(4096) uint64_t VM::s_bootPmt[512];
 
-void VM::init() {
-    clearBss();
-    setupBootPmt();
-    RiscV::loadSatp((uint64_t)&s_bootPmt);
+extern "C" char _bss_start_pa[];
+extern "C" char _bss_end_pa[];
+extern "C" char _boot_pmt_pa[];
+
+void VM::bootstrap() {
+    constexpr uint64_t KERNEL_PHYS = MemoryLayout::PHYS_BASE;
+    constexpr uint64_t PHYS_MAP_VIRT = MemoryLayout::KERNEL_OFFSET;
+
+    auto* bss_cur = (uint64_t*)_bss_start_pa;
+    auto* bss_end = (uint64_t*)_bss_end_pa;
+    while (bss_cur < bss_end) *bss_cur++ = 0;
+
+    auto* boot = (uint64_t*)_boot_pmt_pa;
+    for (int i = 0; i < 512; i++) boot[i] = 0;
+
+    boot[(KERNEL_PHYS >> 30) & 0x1FF] =
+        ((KERNEL_PHYS >> 12) << 10) | (PMT::PAGE_KERN_X | PMT::PAGE_A);
+
+    boot[(MemoryLayout::KERNEL_BASE >> 30) & 0x1FF] =
+        ((KERNEL_PHYS >> 12) << 10) | (PMT::PAGE_KERN_X | PMT::PAGE_A);
+
+    boot[(PHYS_MAP_VIRT >> 30) & 0x1FF] =
+        ((0x00000000ULL >> 12) << 10) | (PMT::PAGE_KERN | PMT::PAGE_A | PMT::PAGE_D);
+
+    boot[(MemoryLayout::MMIO_BASE >> 30) & 0x1FF] =
+        ((0x00000000ULL >> 12) << 10) | (PMT::PAGE_MMIO | PMT::PAGE_A | PMT::PAGE_D);
 }
 
-void VM::clearBss() {
-    auto* current = (uint64_t*)_bss_start;
-    auto* end     = (uint64_t*)_bss_end;
-    while (current < end) *current++ = 0;
-}
-
-void VM::setupBootPmt() {
-    s_bootPmt[level2Index(PMT::KERNEL_PHYS)] =
-        PMT::makePte(PMT::KERNEL_PHYS, PMT::PAGE_KERN_X);
-
-    s_bootPmt[level2Index(PMT::KERNEL_VIRT)] =
-        PMT::makePte(PMT::KERNEL_PHYS, PMT::PAGE_KERN_X);
-
-    s_bootPmt[level2Index(PMT::PHYS_MAP_VIRT)] =
-        PMT::makePte(0x00000000ULL, PMT::PAGE_KERN);
-
-    s_bootPmt[level2Index(MemoryLayout::MMIO_BASE)] =
-        PMT::makePte(0x00000000ULL, PMT::PAGE_MMIO);
-}
+extern "C" void vm_bootstrap() __attribute__((section(".text.init")));
+extern "C" void vm_bootstrap() { VM::bootstrap(); }
 
 PMT* VM::createPMT() {
     auto pmt = new PMT();
@@ -41,7 +42,6 @@ PMT* VM::createPMT() {
     for (int i = 256; i < 512; i++) {
         pmt->m_entries[i] = s_bootPmt[i];
     }
-    pmt->m_entries[2] = s_bootPmt[2];
     return pmt;
 }
 

@@ -8,7 +8,6 @@
 class RiscV{
 
 public:
-    static void init(int(*main)());
     static void loadSatp(uint64_t pmtAddress);
     static void flushTLB();
     static void w_sstatus(uint64_t value);
@@ -47,41 +46,9 @@ public:
     };
 
 private:
-    static void initTimer();
     static uint64_t makeSatp(uint64_t pmtAddress);
     
 };
-
-inline void RiscV::initTimer() {
-    __asm__ volatile("csrw mtvec, %0" :: "r"((uint64_t)&TrapHandler::timerTrap) : "memory");
-    auto mtime = (volatile uint64_t*)0x200BFF8;
-    auto mtimecmp = (volatile uint64_t*)0x2004000;
-    *mtimecmp = *mtime + 1000000;
-    __asm__ volatile("csrs mie, %0" :: "r"(1ULL << 7) : "memory");
-}
-
-inline void RiscV::init(int (*main)()) {
-    initTimer();
-    uint64_t mstatus;
-    __asm__ volatile("csrr %0, mstatus" : "=r"(mstatus));
-    mstatus &= ~(3ULL << 11);
-    mstatus |=  (1ULL << 11);
-    mstatus &= ~(1ULL << 5);
-    mstatus &= ~(1ULL << 1);
-    __asm__ volatile("csrw mstatus, %0" ::"r"(mstatus));
-
-    __asm__ volatile("csrw mepc, %0"    ::"r"((uint64_t)main));
-    __asm__ volatile("csrw medeleg, %0" ::"r"(0xffffULL));
-    __asm__ volatile("csrw mideleg, %0" ::"r"(0xffffULL));
-
-    __asm__ volatile("csrw sie, zero");
-
-    __asm__ volatile("csrw pmpaddr0, %0" ::"r"(0x3fffffffffffffULL));
-    __asm__ volatile("csrw pmpcfg0, %0"  ::"r"(0xfULL));
-
-    asm volatile("mret");
-}
-
 
 inline uint64_t RiscV::makeSatp(uint64_t pmtAddress){
     uint64_t satp_value = (8ULL << 60) | ((pmtAddress >> 12));

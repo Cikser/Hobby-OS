@@ -10,6 +10,7 @@ void TrapHandler::init() {
     RiscV::w_stvec((uint64_t)&_trap_kernel_entry);
     RiscV::ms_sie(RiscV::SIE_SEIE);
     RiscV::ms_sie(RiscV::SIE_STIE);
+    RiscV::ms_sie(RiscV::SIE_SSIE);
 }
 
 void TrapHandler::handleTrap(TrapFrame* trapFrame) {
@@ -23,6 +24,7 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             if (trapFrame->a7 == 1) {
                 Console::kprintf("Hello world!\n");
             }
+            PCB::dispatch();
             break;
         }/*
         case PF_INSTRUCTION: {

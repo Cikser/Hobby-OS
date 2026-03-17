@@ -1,6 +1,7 @@
 #ifndef RISC_V_SCHEDULER_H
 #define RISC_V_SCHEDULER_H
 #include "pcb.h"
+#include "list/proclist.h"
 
 class Scheduler {
 public:
@@ -8,8 +9,7 @@ public:
     static PCB* get();
 
 private:
-    static PCB* m_head;
-    static PCB* m_tail;
+    static ProcList* m_list;
 
 };
 

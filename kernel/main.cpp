@@ -4,6 +4,7 @@
 #include "hw/riscv.h"
 #include "io/disk/disk.h"
 #include "proc/scheduler.h"
+#include "sync/sem.h"
 #include "test/memtest.h"
 #include "trap/trap.h"
 
@@ -22,16 +23,16 @@ int main() {
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();
+	auto main = new Thread(nullptr);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
-	RiscV::ms_sie(RiscV::SIE_STIE);
-	RiscV::ms_sie(RiscV::SIE_SEIE);
-    auto main = new Thread(nullptr);
-	auto t1 = new Thread(printPid);
-	auto t2 = new Thread(printPid);
 	auto initProc = Process::createInit();
+	auto t1 = new Thread(printPid);
 
-	PCB::dispatch();
+	Semaphore sem(0);
+
+	sem.wait();
+	Console::kprintf("After sem\n");
 
 	RiscV::stopEmulation();
 }

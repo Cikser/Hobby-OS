@@ -45,11 +45,14 @@ public:
 
     pid_t pid() const { return m_pid; }
     ProcState state() const { return m_state; }
+    void setState(ProcState state) { m_state = state; }
     PMT* pmt() const { return m_pmt; }
     static pid_t currentPid() { return s_running->pid(); }
+    static PCB* running() { return s_running; }
 
 protected:
     friend class Scheduler;
+    friend class ProcList;
 
     PCB(uint64_t entry, PMT* pmt, bool usermode = true);
 

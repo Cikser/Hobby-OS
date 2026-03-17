@@ -101,29 +101,6 @@ _trap_user_entry:
 
     j _trap_restore
 
-.global _ZN11TrapHandler9timerTrapEv
-.align 2
-_ZN11TrapHandler9timerTrapEv:
-    csrw mscratch, t0
-    addi sp, sp, -8
-    sd   t1, 0(sp)
-
-    li   t1, 0x200BFF8
-    ld   t1, 0(t1)
-    li   t0, 1000000
-    add  t1, t1, t0
-    li   t0, 0x2004000
-    sd   t1, 0(t0)
-
-    li   t0, (1 << 5)
-    csrrs zero, mip, t0
-
-    ld   t1, 0(sp)
-    addi sp, sp, 8
-    csrr t0, mscratch
-
-    mret
-
 .global _trap_restore
 _trap_restore:
     ld   t0, 0(sp)

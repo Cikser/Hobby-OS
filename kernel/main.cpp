@@ -29,6 +29,7 @@ int main() {
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
 
 	Semaphore sem(0);
+	auto initProc = Process::createInit();
 	auto t1 = new Thread(printPid, &sem);
 
 	sem.wait();

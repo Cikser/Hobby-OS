@@ -143,3 +143,29 @@ _trap_restore:
     ld x2,   -240(sp)
 
     sret
+
+.global _ZN11TrapHandler9timerTrapEv
+.align 2
+_ZN11TrapHandler9timerTrapEv:
+    csrrw sp, mscratch, sp
+
+    addi sp, sp, -16
+    sd   t0, 0(sp)
+    sd   t1, 8(sp)
+
+    li   t1, 0x200BFF8
+    ld   t1, 0(t1)
+    li   t0, 1000000
+    add  t1, t1, t0
+    li   t0, 0x2004000
+    sd   t1, 0(t0)
+
+    li   t0, (1 << 5)
+    csrrs zero, mip, t0
+
+    ld   t0, 0(sp)
+    ld   t1, 8(sp)
+    addi sp, sp, 16
+
+    csrrw sp, mscratch, sp
+    mret

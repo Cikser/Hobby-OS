@@ -1,6 +1,7 @@
 #ifndef RISC_V_SEM_H
 #define RISC_V_SEM_H
 
+#include "lock.h"
 #include "../../types.h"
 #include "../list/proclist.h"
 
@@ -24,15 +25,23 @@ public:
     void wait();
 
     bool value() const { return m_value; }
+    bool waiting() const { return !m_blocked->empty(); }
+
+    static void signalWaitAtomic(Semaphore* toSignal, Semaphore* toWait);
 
 private:
-    void block() const;
+    void block();
     void unblock() const;
 
+    void signalUnlocked();
+    void waitUnlocked();
+
     static KMemCache<Semaphore>* s_cache;
+    static Lock s_lock;
 
     uint32_t m_value;
     ProcList* m_blocked;
+    Lock m_lock;
 };
 
 #endif

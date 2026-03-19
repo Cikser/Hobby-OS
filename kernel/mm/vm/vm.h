@@ -11,6 +11,9 @@ public:
     static PMT* createPMT();
     static void destroyPMT(const PMT* pmt);
 
+    static bool copyPMT(PMT* dst, PMT* src);
+    static void clearUserPages(PMT* pmt);
+
 private:
     friend class Thread;
     alignas(4096) static uint64_t s_bootPmt[512];

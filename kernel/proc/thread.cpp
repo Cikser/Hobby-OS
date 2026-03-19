@@ -32,5 +32,9 @@ Thread::Thread(void (*entry)(void*), void* args) :
 }
 
 Thread::~Thread() {
-
+    if (m_pmt)
+        m_pmt->unmapPages(USER_STACK_TOP - m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE) - USER_STACK_SIZE,
+            USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    if (m_ustack)
+        MemoryAllocator::kfreePages(m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
 }

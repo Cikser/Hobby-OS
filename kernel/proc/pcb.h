@@ -94,7 +94,7 @@ public:
     }
 
     static Process* createInit();
-    Process* fork();
+    Process* fork() const;
     int exec(const char* elfPath);
     Thread* createThread(void(*entry)(void*));
 

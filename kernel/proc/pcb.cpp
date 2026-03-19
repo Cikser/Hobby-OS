@@ -87,7 +87,6 @@ void PCB::dispatch() {
         RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
         next->m_trapFrame->kstack = (uint64_t)next->m_kstack + KERNEL_STACK_SIZE;
     }
-    RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
     RiscV::w_stvec((uint64_t)(next->m_usermode ? &_trap_user_entry : &_trap_kernel_entry));
 
     switchContext(&current->m_context, &next->m_context);
@@ -96,7 +95,4 @@ void PCB::dispatch() {
 PCB::~PCB() {
     if (m_kstack)
         MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-    if (m_usermode) {
-        MemoryAllocator::kfreePages(m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-    }
 }

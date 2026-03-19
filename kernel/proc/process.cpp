@@ -39,25 +39,25 @@ Process* Process::createInit() {
         Console::panic("Process:createInit(): failed to load ELF");
     }
     proc->m_entry = entry;
-    Scheduler::put(proc);
     return proc;
 }
 
-Process* Process::fork() {
+Process* Process::fork() const {
     PMT* pmt = VM::createPMT();
-    // todo pmt copy
-    auto child = new Process(pmt, 0);
+    VM::copyPMT(pmt, m_pmt);
+    auto child = new Process(pmt, -1);
     memcpy(child->m_trapFrame, m_trapFrame, sizeof(TrapFrame));
     child->m_trapFrame->a0 = 0;
-    Scheduler::put(child);
+    child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
     return child;
 }
 
 int Process::exec(const char* elfPath) {
-    // todo unmap existing pages
+    VM::clearUserPages(m_pmt);
     uint64_t entry = ElfLoader::load(elfPath, m_pmt);
     if (!entry) return -1;
-
     m_entry = entry;
+    m_trapFrame->sepc = entry;
+    m_trapFrame->sp = USER_STACK_TOP;
     return 0;
 }

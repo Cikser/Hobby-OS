@@ -2,6 +2,13 @@
 
 KMemCache<File>* File::s_cache = new KMemCache<File>();
 
+File::File(const File& other, bool copyOffset) {
+    m_inode = other.m_inode;
+    m_flags = other.m_flags;
+    m_offset = copyOffset ? other.m_offset : 0;
+    m_mount = other.m_mount;
+}
+
 int File::read(void* buf, uint64_t len) {
     if (!(m_flags & O_RDONLY)) return -1;
     if (!m_inode) return -1;
@@ -35,7 +42,8 @@ uint64_t File::tell() const {
 
 void File::close() {
     if (!m_inode) return;
-    m_mount->putInode(m_inode);
+    if (m_mount)
+        m_mount->putInode(m_inode);
     m_inode = nullptr;
     m_mount = nullptr;
 }

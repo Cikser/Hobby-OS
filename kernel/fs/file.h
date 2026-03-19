@@ -9,6 +9,7 @@ class File {
 public:
     File(VfsInode* inode, VfsMount* mount, uint32_t flags)
         : m_inode(inode), m_mount(mount), m_flags(flags), m_offset(0) {}
+    File(const File& other, bool copyOffset = false);
 
     void* operator new(size_t size) {
         if (!s_cache)

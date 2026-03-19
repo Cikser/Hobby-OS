@@ -1,5 +1,4 @@
 #include "pcb.h"
-
 #include "scheduler.h"
 #include "../hw/riscv.h"
 #include "../io/console/console.h"
@@ -76,8 +75,10 @@ void PCB::dispatch() {
     PCB* next = Scheduler::get();
     while (next && next->m_state != ProcState::READY)
         next = Scheduler::get();
-    if (!next)
+    if (!next) {
         Console::panic("PCB::dispatch(): No ready processes");
+        return;
+    }
 
     s_running = next;
     next->m_state = ProcState::RUNNING;

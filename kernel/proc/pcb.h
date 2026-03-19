@@ -1,6 +1,7 @@
 #ifndef RISC_V_PCB_H
 #define RISC_V_PCB_H
 
+#include "file.h"
 #include "../types.h"
 #include "../trap/trapframe.h"
 #include "../mm/vm/pmt.h"
@@ -101,10 +102,15 @@ public:
 private:
     friend class Thread;
 
+    static constexpr uint32_t MAX_FDS = 16;
+
     static KMemCache<Process>* s_cache;
 
-    Process(PMT* pmt, uint64_t entry);
+    Process(PMT* pmt, uint64_t entry, const Process* parent);
+
     Thread* m_threads;
+    const Process* m_parent;
+    File* m_fds[MAX_FDS]{};
 };
 
 class Thread : public PCB {

@@ -13,19 +13,20 @@ Process::Process(PMT* pmt, uint64_t entry, const Process* parent) :
     m_threads(nullptr),
     m_parent(parent)
 {
-    uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
-    m_pmt->mapPages(
-        USER_STACK_TOP - USER_STACK_SIZE,
-        ustackPa,
-        USER_STACK_SIZE / MemoryLayout::PAGE_SIZE,
-        PMT::PAGE_USER
-    );
     if (parent) {
         for (int i = 0; i < MAX_FDS; i++) {
-            m_fds[i] = new File(*parent->m_fds[i], true);
+            if (parent->m_fds[i])
+                m_fds[i] = new File(*parent->m_fds[i], true);
         }
     }
     else {
+        uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
+        m_pmt->mapPages(
+            USER_STACK_TOP - USER_STACK_SIZE,
+            ustackPa,
+            USER_STACK_SIZE / MemoryLayout::PAGE_SIZE,
+            PMT::PAGE_USER
+        );
         m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
         m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
         m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
@@ -40,6 +41,7 @@ Process::~Process() {
         t = next;
     }
     for (auto& fd : m_fds) {
+        if (!fd) continue;
         fd->close();
         delete fd;
     }
@@ -58,14 +60,24 @@ Process* Process::createInit() {
     return proc;
 }
 
-Process* Process::fork() const {
+Process* Process::fork() {
     PMT* pmt = VM::createPMT();
     VM::copyPMT(pmt, m_pmt);
     auto child = new Process(pmt, -1, this);
+
+    MemoryAllocator::kfreePages(child->m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    child->m_ustack = (uint8_t*)MemoryLayout::p2v(child->m_pmt->translate(USER_STACK_TOP - USER_STACK_SIZE));
+
     memcpy(child->m_trapFrame, m_trapFrame, sizeof(TrapFrame));
+    child->m_entry = m_trapFrame->sepc;
     child->m_trapFrame->a0 = 0;
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
     return child;
+}
+
+File* Process::getFile(int fd) {
+    if (fd < 0 || fd >= MAX_FDS || !m_fds[fd]) return nullptr;
+    return m_fds[fd];
 }
 
 int Process::exec(const char* elfPath) {

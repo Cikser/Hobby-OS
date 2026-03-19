@@ -135,6 +135,9 @@ _trap_restore_user:
     ld x30,  240(sp)
     ld x31,  248(sp)
 
+    la   t0, _trap_user_entry
+    csrw stvec, t0
+
     ld   t0, 256(sp)
     csrw sscratch, t0
 

@@ -45,9 +45,10 @@ void PCB::pcbEntry() {
         RiscV::w_stvec((uint64_t)&_trap_user_entry);
         RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
         RiscV::mc_sstatus(RiscV::SSTATUS_SPP);
-        RiscV::w_sepc(current->m_entry);
-        current->m_trapFrame->sp = USER_STACK_TOP;
-        current->m_trapFrame->sepc = current->m_entry;
+        if (current->m_entry != current->m_trapFrame->sepc) {
+            current->m_trapFrame->sp = USER_STACK_TOP;
+            current->m_trapFrame->sepc = current->m_entry;
+        }
         __asm__ volatile(
             "mv sp, %0\n"
             "j  _trap_restore_user\n"

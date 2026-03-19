@@ -3,6 +3,7 @@
 #include "../hw/riscv.h"
 #include "../io/console/console.h"
 #include "../proc/pcb.h"
+#include "syscall/syscall.h"
 
 extern "C" void _trap_kernel_entry();
 
@@ -17,14 +18,10 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
     uint64_t stval = RiscV::r_stval();
     uint64_t scause = RiscV::r_scause();
     uint64_t sepc = RiscV::r_sepc();
-    uint64_t sstatus = RiscV::r_sstatus();
     switch (scause) {
         case SYSCALL: {
             trapFrame->sepc += 4;
-            if (trapFrame->a7 == 1) {
-                Console::kprintf("Hello world!\n");
-            }
-            PCB::dispatch();
+            SyscallHandler::handle(trapFrame);
             break;
         }/*
         case PF_INSTRUCTION: {

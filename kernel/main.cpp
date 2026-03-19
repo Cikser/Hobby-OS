@@ -28,10 +28,11 @@ int main() {
 	auto main = new Thread(nullptr);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
-	Semaphore sem(0);
-	auto t1 = new Thread(runTests, &sem);
-	sem.wait();
-	Console::kprintf("after sem\n");
+	Process* initProc = Process::createInit();
+
+	while (!Scheduler::empty()) PCB::dispatch();
+
+	Console::kprintf("back in main\n");
 
 	RiscV::stopEmulation();
 }

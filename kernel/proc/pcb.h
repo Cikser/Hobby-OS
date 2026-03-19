@@ -51,6 +51,9 @@ public:
     static pid_t currentPid() { return s_running->pid(); }
     static PCB* running() { return s_running; }
 
+    virtual PCB* fork() = 0;
+    virtual File* getFile(int fd) = 0;
+
 protected:
     friend class Scheduler;
     friend class ProcList;
@@ -95,9 +98,11 @@ public:
     }
 
     static Process* createInit();
-    Process* fork() const;
     int exec(const char* elfPath);
     Thread* createThread(void(*entry)(void*));
+
+    Process* fork() override;
+    File* getFile(int fd) override;
 
 private:
     friend class Thread;
@@ -129,6 +134,9 @@ public:
     void operator delete(void* ptr) {
         s_cache->free(ptr);
     }
+
+    PCB* fork() override;
+    File* getFile(int fd) override { return m_parent->getFile(fd); }
 
 private:
     friend class Process;

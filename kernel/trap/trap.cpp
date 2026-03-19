@@ -39,7 +39,10 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             trapFrame->sepc += 4;
         }*/
         case TIMER_INTERRUPT: {
+            RiscV::mc_sip(RiscV::SIP_STIP);
+            uint64_t sstatus = RiscV::r_sstatus();
             PCB::dispatch();
+            RiscV::w_sstatus(sstatus);
             break;
         }
         /*case EXTERNAL_INTERRUPT: {

@@ -8,10 +8,11 @@
 #include "test/memtest.h"
 #include "trap/trap.h"
 
-void runTests() {
+void runTests(void* arg) {
 	MemTest::run();
 	//DiskTest::run();
 	FsTest::run();
+	((Semaphore*)arg)->signal();
 }
 
 void printPid(void* arg) {
@@ -24,6 +25,13 @@ int main() {
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();
-	runTests();
+	auto main = new Thread(nullptr);
+	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
+	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
+	Semaphore sem(0);
+	auto t1 = new Thread(runTests, &sem);
+	sem.wait();
+	Console::kprintf("after sem\n");
+
 	RiscV::stopEmulation();
 }

@@ -28,11 +28,12 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     }
     else {
         s_running = this;
+        memset(&m_context, 0, sizeof(m_context));
         m_state = ProcState::RUNNING;
     }
 }
 
-extern "C" void _trap_restore();
+extern "C" void _trap_restore_user();
 extern "C" void _trap_user_entry();
 extern "C" void _trap_kernel_entry();
 
@@ -49,7 +50,7 @@ void PCB::pcbEntry() {
         current->m_trapFrame->sepc = current->m_entry;
         __asm__ volatile(
             "mv sp, %0\n"
-            "j  _trap_restore\n"
+            "j  _trap_restore_user\n"
             :: "r"(current->m_trapFrame)
             : "memory"
         );
@@ -65,6 +66,7 @@ void PCB::exit() {
 }
 
 void PCB::dispatch() {
+    if (Scheduler::empty()) return;
     PCB* current = s_running;
     if (current->m_state == ProcState::RUNNING) {
         current->m_state = ProcState::READY;
@@ -87,9 +89,9 @@ void PCB::dispatch() {
 }
 
 PCB::~PCB() {
-    MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    if (m_kstack)
+        MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
     if (m_usermode) {
-        MemoryAllocator::kfreePages(
-            m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+        MemoryAllocator::kfreePages(m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
     }
 }

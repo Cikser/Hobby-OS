@@ -25,6 +25,10 @@ public:
     static void mc_sie(uint64_t mask);
     static uint64_t r_sie();
     static void w_sie(uint64_t value);
+    static void ms_sip(uint64_t mask);
+    static void mc_sip(uint64_t mask);
+    static uint64_t r_sip();
+    static void w_sip(uint64_t value);
 
     static void sModeEntry() __attribute__((section(".text.init")));
 
@@ -43,6 +47,12 @@ public:
         SIE_SEIE = 1 << 9,
         SIE_STIE = 1 << 5,
         SIE_SSIE = 1 << 1
+    };
+
+    enum SIPFlags : uint64_t {
+        SIP_SSIP = 1 << 1,
+        SIP_STIP = 1 << 5,
+        SIP_SEIP = 1 << 9,
     };
 
 private:
@@ -135,6 +145,24 @@ inline uint64_t RiscV::r_sie(){
 
 inline void RiscV::w_sie(uint64_t value){
     __asm__ volatile("csrw sie, %0" :: "r"(value));
+}
+
+inline uint64_t RiscV::r_sip() {
+    uint64_t value;
+    __asm__ volatile("csrr %0, sip" : "=r"(value));
+    return value;
+}
+
+inline void RiscV::w_sip(uint64_t value) {
+    __asm__ volatile("csrw sip, %0" :: "r"(value));
+}
+
+inline void RiscV::mc_sip(uint64_t mask) {
+    __asm__ volatile("csrc sip, %0" :: "r"(mask));
+}
+
+inline void RiscV::ms_sip(uint64_t mask) {
+    __asm__ volatile("csrc sip, %0" :: "r"(mask));
 }
 
 #endif

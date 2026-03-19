@@ -24,16 +24,6 @@ int main() {
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();
-	auto main = new Thread(nullptr);
-	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
-	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
-
-	Semaphore sem(0);
-	auto initProc = Process::createInit();
-	auto t1 = new Thread(printPid, &sem);
-
-	sem.wait();
-	Console::kprintf("After sem\n");
-
+	runTests();
 	RiscV::stopEmulation();
 }

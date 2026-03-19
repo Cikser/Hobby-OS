@@ -4,9 +4,9 @@
 KMemCache<Lock>* Lock::s_cache = nullptr;
 
 void Lock::acquire() {
-    while (__sync_lock_test_and_set(&m_locked, 1));
     m_pie = RiscV::r_sstatus() & RiscV::SSTATUS_SIE;
     RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
+    while (__sync_lock_test_and_set(&m_locked, 1));
 }
 
 void Lock::release() {

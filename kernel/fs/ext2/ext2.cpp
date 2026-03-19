@@ -202,9 +202,9 @@ void Ext2Mount::freeInode(uint32_t num) {
 
     bitmap.buf[index / 8] &= ~(1 << (index % 8));
     writeBlock(desc.bg_inode_bitmap, bitmap.buf);
-    desc.bg_free_inodes_count--;
+    desc.bg_free_inodes_count++;
     writeGroupDesc(group, desc);
-    m_sb.s_free_inodes_count--;
+    m_sb.s_free_inodes_count++;
     Disk::write(2, &m_sb);
     Disk::write(3, (uint8_t*)&m_sb + Disk::SECTOR_SIZE);
 }
@@ -414,7 +414,7 @@ int Ext2Mount::unlink(VfsInode* parent, const char* path) {
     }
     if (!found) return -1;
 
-    Ext2InodeDisk raw = readRawInode(dir->inodeNum());
+    Ext2InodeDisk raw = readRawInode(entry.inodeNum);
     raw.i_links_count--;
     if (raw.i_links_count == 0) {
         Ext2Inode* inode = (Ext2Inode*)getInode(entry.inodeNum);
@@ -426,7 +426,7 @@ int Ext2Mount::unlink(VfsInode* parent, const char* path) {
         freeInode(entry.inodeNum);
     }
     else {
-        writeRawInode(dir->inodeNum(), raw);
+        writeRawInode(entry.inodeNum, raw);
     }
     return removeDirEntry(dir, path);
 }

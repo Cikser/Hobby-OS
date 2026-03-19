@@ -90,6 +90,6 @@ PCB::~PCB() {
     MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
     if (m_usermode) {
         MemoryAllocator::kfreePages(
-            (void*)MemoryLayout::v2p((uint64_t)m_ustack), USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+            m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
     }
 }

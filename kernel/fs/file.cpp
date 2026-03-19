@@ -7,6 +7,7 @@ int File::read(void* buf, uint64_t len) {
     if (!m_inode) return -1;
 
     int n = m_inode->read(m_offset, buf, len);
+    if (n == -1) return -1;
     m_offset += n;
     return n;
 }

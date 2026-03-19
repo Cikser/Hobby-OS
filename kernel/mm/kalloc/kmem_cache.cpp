@@ -22,10 +22,10 @@ void* MemCache::alloc() {
         m_empty = m_empty->next;
     }
     ret = m_partial->getSlot();
-    if (m_partial->empty()) {
+    if (m_partial->full()) {
         Slab* temp = m_partial->next;
-        m_partial->next = m_empty;
-        m_empty = m_partial;
+        m_partial->next = m_full;
+        m_full = m_partial;
         m_partial = temp;
     }
     return ret;

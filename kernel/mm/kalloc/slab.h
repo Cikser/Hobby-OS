@@ -19,6 +19,7 @@ public:
     void freeSlot(void* slot);
 
     bool empty() const;
+    bool full() const;
     bool contains(void* obj);
 
     Slab *next;

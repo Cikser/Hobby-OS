@@ -75,9 +75,14 @@ void Slab::freeSlot(void* slot) {
 }
 
 bool Slab::contains(void *obj) {
-    return (uint64_t)obj >= (uint64_t)m_start && (uint64_t)obj < (uint64_t)this + m_cache->m_slabSize;
+    return (uint64_t)obj >= (uint64_t)m_start && (uint64_t)obj <
+        MemoryLayout::pageRoundDown((uint64_t)m_start + m_cache->m_slabSize);
 }
 
 bool Slab::empty() const {
     return m_freeSlots == m_maxSlots;
+}
+
+bool Slab::full() const {
+    return m_freeSlots == 0;
 }

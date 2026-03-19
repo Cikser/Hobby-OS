@@ -36,6 +36,7 @@ struct TrapFrame {
     uint64_t t4;
     uint64_t t5;
     uint64_t t6;
+    uint64_t kstack;
 };
 
 #endif

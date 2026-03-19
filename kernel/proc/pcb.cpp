@@ -41,7 +41,8 @@ void PCB::pcbEntry() {
     PCB* current = s_running;
 
     if (current->m_usermode) {
-        RiscV::w_sscratch((uint64_t)current->m_kstack + KERNEL_STACK_SIZE);
+        current->m_trapFrame->kstack = (uint64_t)current->m_kstack + KERNEL_STACK_SIZE;
+        RiscV::w_sscratch(current->m_trapFrame->kstack);
         RiscV::w_stvec((uint64_t)&_trap_user_entry);
         RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
         RiscV::mc_sstatus(RiscV::SSTATUS_SPP);
@@ -82,6 +83,10 @@ void PCB::dispatch() {
     next->m_state = ProcState::RUNNING;
     if (next->m_pmt)
         next->m_pmt->activate();
+    if (next->m_usermode) {
+        RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
+        next->m_trapFrame->kstack = (uint64_t)next->m_kstack + KERNEL_STACK_SIZE;
+    }
     RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
     RiscV::w_stvec((uint64_t)(next->m_usermode ? &_trap_user_entry : &_trap_kernel_entry));
 

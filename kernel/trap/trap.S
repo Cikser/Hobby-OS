@@ -51,10 +51,9 @@ _ZN11TrapHandler4trapEv:
 .align 2
 _trap_user_entry:
     csrrw sp, sscratch, sp
-    addi  sp, sp, -256
+    addi  sp, sp, -264
 
     sd x1,   8(sp)
-    sd x2,   16(sp)
     sd x3,   24(sp)
     sd x4,   32(sp)
     sd x5,   40(sp)
@@ -87,8 +86,8 @@ _trap_user_entry:
 
     csrr t0, sscratch
     sd   t0, 16(sp)
-    addi t0, sp, 256
-    csrw sscratch, t0
+    addi t0, sp, 264
+    sd   t0, 256(sp)
 
     csrr t0, sepc
     sd   t0, 0(sp)
@@ -109,7 +108,6 @@ _trap_restore_user:
     ld x1,   8(sp)
     ld x3,   24(sp)
     ld x4,   32(sp)
-    ld x5,   40(sp)
     ld x6,   48(sp)
     ld x7,   56(sp)
     ld x8,   64(sp)
@@ -137,10 +135,11 @@ _trap_restore_user:
     ld x30,  240(sp)
     ld x31,  248(sp)
 
-    addi sp, sp, 256
-    csrw sscratch, sp
+    ld   t0, 256(sp)
+    csrw sscratch, t0
 
-    ld x2,   -240(sp)
+    ld x5,   40(sp)
+    ld x2,   16(sp)
 
     sret
 

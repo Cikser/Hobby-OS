@@ -1,5 +1,5 @@
-#include "pcb.h"
-#include "../mm/vm/vm.h"
+#include "thread.h"
+#include "../../mm/vm/vm.h"
 
 KMemCache<Thread>* Thread::s_cache = nullptr;
 

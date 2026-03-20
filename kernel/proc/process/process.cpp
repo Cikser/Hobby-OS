@@ -1,12 +1,11 @@
-#include "buddy.h"
-#include "pcb.h"
-#include "scheduler.h"
-#include "uart_inode.h"
-#include "vfs.h"
-#include "../io/console/console.h"
-#include "../mm/mem.h"
-#include "../mm/vm/vm.h"
-#include "elf/elf.h"
+#include "process.h"
+#include "../thread/thread.h"
+#include "../../io/console/uart_inode.h"
+#include "../../fs/vfs.h"
+#include "../../io/console/console.h"
+#include "../../mm/mem.h"
+#include "../../mm/vm/vm.h"
+#include "../elf/elf.h"
 
 KMemCache<Process>* Process::s_cache = nullptr;
 
@@ -32,6 +31,8 @@ Process::Process(PMT* pmt, uint64_t entry, const Process* parent) :
         m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
         m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
         m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
+        m_heapEnd = HEAP_START;
+        m_heapStart = HEAP_START;
     }
 }
 
@@ -93,6 +94,8 @@ int Process::exec(const char* elfPath) {
     m_entry = entry;
     m_trapFrame->sepc = entry;
     m_trapFrame->sp = USER_STACK_TOP;
+    m_heapEnd = HEAP_START;
+    m_heapStart = HEAP_START;
     return 0;
 }
 
@@ -102,7 +105,7 @@ uint64_t Process::brk(uint64_t newHeapEnd) {
     if (newHeapEnd > m_heapEnd) {
         uint32_t pageNum = (newHeapEnd - m_heapEnd) / MemoryLayout::PAGE_SIZE;
         for (uint32_t i = 0; i < pageNum; i++) {
-            uint64_t page = (uint64_t)MemoryAllocator::kallocPage();
+            auto page = (uint64_t)MemoryAllocator::kallocPage();
             uint64_t pagePa = MemoryLayout::v2p(page);
             if (m_pmt->mapPage(m_heapEnd, pagePa, PMT::PAGE_USER))
                 m_heapEnd += MemoryLayout::PAGE_SIZE;

@@ -7,6 +7,8 @@
 #include "sync/sem.h"
 #include "test/memtest.h"
 #include "trap/trap.h"
+#include "proc/process/process.h"
+#include "proc/thread/thread.h"
 
 void runTests(void* arg) {
 	MemTest::run();

@@ -40,7 +40,8 @@ public:
     enum SStatusFlags : uint64_t {
         SSTATUS_SIE = 1 << 1,
         SSTATUS_SPIE = 1 << 5,
-        SSTATUS_SPP = 1 << 8
+        SSTATUS_SPP = 1 << 8,
+        SSTATUS_SUM = 1 << 18
     };
 
     enum SIEFlags : uint64_t {

@@ -53,6 +53,8 @@ public:
 
     virtual PCB* fork() = 0;
     virtual File* getFile(int fd) = 0;
+    virtual uint64_t brk(uint64_t newHeapEnd) = 0;
+    virtual uint64_t openFile(char* path, uint64_t flags) = 0;
 
 protected:
     friend class Scheduler;
@@ -103,11 +105,14 @@ public:
 
     Process* fork() override;
     File* getFile(int fd) override;
+    uint64_t brk(uint64_t newHeapEnd) override;
+    uint64_t openFile(char* path, uint64_t flags) override;
 
 private:
     friend class Thread;
 
     static constexpr uint32_t MAX_FDS = 16;
+    static constexpr uint64_t HEAP_START = 0x1000000;
 
     static KMemCache<Process>* s_cache;
 
@@ -116,6 +121,8 @@ private:
     Thread* m_threads;
     const Process* m_parent;
     File* m_fds[MAX_FDS]{};
+    uint64_t m_heapStart;
+    uint64_t m_heapEnd;
 };
 
 class Thread : public PCB {
@@ -135,8 +142,10 @@ public:
         s_cache->free(ptr);
     }
 
-    PCB* fork() override;
+    PCB* fork() override { return m_parent->fork(); }
     File* getFile(int fd) override { return m_parent->getFile(fd); }
+    uint64_t brk(uint64_t newHeapEnd) override { return m_parent->brk(newHeapEnd); }
+    uint64_t openFile(char* path, uint64_t flags) override { return m_parent->openFile(path, flags); };
 
 private:
     friend class Process;

@@ -38,7 +38,3 @@ Thread::~Thread() {
     if (m_ustack)
         MemoryAllocator::kfreePages(m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
 }
-
-PCB* Thread::fork() {
-    return m_parent->fork();
-}

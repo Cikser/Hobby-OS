@@ -26,9 +26,9 @@ public:
 
     static constexpr uint32_t O_RDONLY = 0x1;
     static constexpr uint32_t O_WRONLY = 0x2;
-    static constexpr uint32_t O_RDWR   = 0x3;
-    static constexpr uint32_t O_CREAT  = 0x4;
-    static constexpr uint32_t O_TRUNC  = 0x8;
+    static constexpr uint32_t O_RDWR = 0x3;
+    static constexpr uint32_t O_CREAT = 0x40;
+    static constexpr uint32_t O_TRUNC = 0x200;
 
 private:
     static KMemCache<File>* s_cache;

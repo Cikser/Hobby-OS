@@ -1,6 +1,8 @@
+#include "buddy.h"
 #include "pcb.h"
 #include "scheduler.h"
 #include "uart_inode.h"
+#include "vfs.h"
 #include "../io/console/console.h"
 #include "../mm/mem.h"
 #include "../mm/vm/vm.h"
@@ -57,6 +59,8 @@ Process* Process::createInit() {
         Console::panic("Process:createInit(): failed to load ELF");
     }
     proc->m_entry = entry;
+    proc->m_heapStart = HEAP_START;
+    proc->m_heapEnd = HEAP_START;
     return proc;
 }
 
@@ -70,6 +74,8 @@ Process* Process::fork() {
 
     memcpy(child->m_trapFrame, m_trapFrame, sizeof(TrapFrame));
     child->m_entry = m_trapFrame->sepc;
+    child->m_heapStart = m_heapStart;
+    child->m_heapEnd = m_heapEnd;
     child->m_trapFrame->a0 = 0;
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
     return child;
@@ -88,4 +94,46 @@ int Process::exec(const char* elfPath) {
     m_trapFrame->sepc = entry;
     m_trapFrame->sp = USER_STACK_TOP;
     return 0;
+}
+
+uint64_t Process::brk(uint64_t newHeapEnd) {
+    if (newHeapEnd == 0 || newHeapEnd < m_heapStart || newHeapEnd == m_heapEnd) return m_heapEnd;
+
+    if (newHeapEnd > m_heapEnd) {
+        uint32_t pageNum = (newHeapEnd - m_heapEnd) / MemoryLayout::PAGE_SIZE;
+        for (uint32_t i = 0; i < pageNum; i++) {
+            uint64_t page = (uint64_t)MemoryAllocator::kallocPage();
+            uint64_t pagePa = MemoryLayout::v2p(page);
+            if (m_pmt->mapPage(m_heapEnd, pagePa, PMT::PAGE_USER))
+                m_heapEnd += MemoryLayout::PAGE_SIZE;
+            else
+                Console::panic("Process:brk(): failed to map page");
+        }
+    }
+    else {
+        uint32_t pageNum = (m_heapEnd - newHeapEnd) / MemoryLayout::PAGE_SIZE;
+        for (uint32_t i = 0; i < pageNum; i++) {
+            uint64_t pagePa = m_pmt->translate(m_heapEnd - MemoryLayout::PAGE_SIZE);
+            if (m_pmt->unmapPage(m_heapEnd - MemoryLayout::PAGE_SIZE)) {
+                MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pagePa));
+                m_heapEnd -= MemoryLayout::PAGE_SIZE;
+            }
+            else
+                Console::panic("Process:brk(): failed to unmap page");
+        }
+    }
+    return m_heapEnd;
+}
+
+
+uint64_t Process::openFile(char* path, uint64_t flags) {
+    File* file = VFS::open(path, flags);
+    if (!file) return -1;
+    for (int i = 0; i < MAX_FDS; i++) {
+        if (!m_fds[i]) {
+            m_fds[i] = file;
+            return i;
+        }
+    }
+    return -1;
 }

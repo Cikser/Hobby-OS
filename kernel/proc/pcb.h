@@ -55,6 +55,7 @@ public:
     virtual File* getFile(int fd) = 0;
     virtual uint64_t brk(uint64_t newHeapEnd) = 0;
     virtual uint64_t openFile(char* path, uint64_t flags) = 0;
+    virtual int closeFile(int fd) = 0;
 
 protected:
     friend class Scheduler;
@@ -107,6 +108,7 @@ public:
     File* getFile(int fd) override;
     uint64_t brk(uint64_t newHeapEnd) override;
     uint64_t openFile(char* path, uint64_t flags) override;
+    int closeFile(int fd) override;
 
 private:
     friend class Thread;
@@ -146,6 +148,7 @@ public:
     File* getFile(int fd) override { return m_parent->getFile(fd); }
     uint64_t brk(uint64_t newHeapEnd) override { return m_parent->brk(newHeapEnd); }
     uint64_t openFile(char* path, uint64_t flags) override { return m_parent->openFile(path, flags); };
+    int closeFile(int fd) override { return m_parent->closeFile(fd); }
 
 private:
     friend class Process;

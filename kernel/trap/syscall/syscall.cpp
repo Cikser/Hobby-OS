@@ -13,11 +13,11 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_GETPID: tf->a0 = sys_getpid(tf); break;
     case SYS_FORK: tf->a0 = sys_fork(tf); break;
     //case SYS_EXECVE:  tf->a0 = sys_execve(tf); break;
-    //case SYS_WAIT4:   tf->a0 = sys_wait4(tf);  break;
-    case SYS_READ:    tf->a0 = sys_read(tf);   break;
+    //case SYS_WAIT4: tf->a0 = sys_wait4(tf); break;
+    case SYS_READ: tf->a0 = sys_read(tf); break;
     case SYS_WRITE: tf->a0 = sys_write(tf); break;
-    case SYS_OPENAT:  tf->a0 = sys_openat(tf); break;
-    //case SYS_CLOSE:   tf->a0 = sys_close(tf);  break;
+    case SYS_OPENAT: tf->a0 = sys_openat(tf); break;
+    case SYS_CLOSE: tf->a0 = sys_close(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -83,10 +83,13 @@ uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
     char path[256];
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     auto src = (char*)filePath;
-    int i = 0;
-    while (i < 255 && src[i]) { path[i] = src[i]; i++; }
-    path[i] = '\0';
+    strcpy(path, src);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
     return PCB::running()->openFile(path, flags);
+}
+
+uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
+    int fd = tf->a0;
+    return PCB::running()->closeFile(fd);
 }

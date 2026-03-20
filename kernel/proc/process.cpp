@@ -137,3 +137,13 @@ uint64_t Process::openFile(char* path, uint64_t flags) {
     }
     return -1;
 }
+
+int Process::closeFile(int fd) {
+    if (getFile(fd)) {
+        m_fds[fd]->close();
+        delete m_fds[fd];
+        m_fds[fd] = nullptr;
+        return 0;
+    }
+    return -1;
+}

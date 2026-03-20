@@ -41,4 +41,15 @@ extern "C" inline size_t strlen(const char* s) {
     return n;
 }
 
+extern "C" inline char* strcpy(char* dest, const char* src){
+    char* ptr = dest;
+    while(*src != '\0'){
+        *dest = *src;
+        dest++;
+        src++;
+    }
+    *dest = '\0';
+    return ptr;
+}
+
 #endif

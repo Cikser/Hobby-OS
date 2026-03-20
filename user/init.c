@@ -12,6 +12,7 @@ static long syscall(long num, long a0, long a1, long a2, long a3) {
 }
 
 #define SYS_OPENAT  56
+#define SYS_CLOSE   57
 #define SYS_READ    63
 #define SYS_WRITE   64
 #define SYS_GETPID  172
@@ -31,6 +32,7 @@ void _start() {
         int fd = syscall(SYS_OPENAT, 0, (long)path, 1, 0);
         char buf[256];
         syscall(SYS_READ, fd, (long)buf, 256, 0);
+        syscall(SYS_CLOSE, fd, 0, 0, 0);
         syscall(SYS_WRITE, 1, (long)buf, 256, 0);
         syscall(SYS_WRITE, 1, (long)"After write\n", 12, 0);
     } else {

@@ -5,6 +5,7 @@
 #include "../types.h"
 #include "../trap/trapframe.h"
 #include "../mm/vm/pmt.h"
+#include "../mm/vm/segment.h"
 
 typedef uint64_t pid_t;
 
@@ -56,6 +57,7 @@ public:
     virtual uint64_t brk(uint64_t newHeapEnd) = 0;
     virtual uint64_t openFile(char* path, uint64_t flags) = 0;
     virtual int closeFile(int fd) = 0;
+    virtual SegmentTable* segmentTable() const = 0;
 
 protected:
     friend class Scheduler;

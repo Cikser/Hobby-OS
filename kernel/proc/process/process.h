@@ -30,6 +30,7 @@ public:
     uint64_t brk(uint64_t newHeapEnd) override;
     uint64_t openFile(char* path, uint64_t flags) override;
     int closeFile(int fd) override;
+    SegmentTable* segmentTable() const override { return m_segTable; };
 
 private:
     friend class Thread;
@@ -44,8 +45,7 @@ private:
     Thread* m_threads;
     const Process* m_parent;
     File* m_fds[MAX_FDS]{};
-    uint64_t m_heapStart;
-    uint64_t m_heapEnd;
+    SegmentTable* m_segTable;
 };
 
 #endif

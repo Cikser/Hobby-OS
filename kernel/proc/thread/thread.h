@@ -26,6 +26,7 @@ public:
     uint64_t brk(uint64_t newHeapEnd) override { return m_parent->brk(newHeapEnd); }
     uint64_t openFile(char* path, uint64_t flags) override { return m_parent->openFile(path, flags); };
     int closeFile(int fd) override { return m_parent->closeFile(fd); }
+    SegmentTable* segmentTable() const override { return m_parent->segmentTable(); }
 
 private:
     friend class Process;

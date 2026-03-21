@@ -1,4 +1,5 @@
 #include "elf.h"
+#include "../../mm/vm/segment.h"
 #include "../pcb.h"
 #include "../../fs/file.h"
 #include "../../fs/vfs.h"
@@ -27,7 +28,7 @@ uint64_t ElfLoader::flagsToPte(uint32_t flags) {
     return pte;
 }
 
-uint64_t ElfLoader::load(const char* path, PMT* pmt) {
+uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
     File* file = VFS::open(path, File::O_RDONLY);
     if (!file) return 0;
 
@@ -58,6 +59,23 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt) {
         uint64_t pa = MemoryLayout::v2p((uint64_t)mem);
         uint64_t flags = flagsToPte(programHeader.p_flags);
         pmt->mapPages(va, pa, pages, flags);
+
+        if (!segTable) continue;
+
+        uint64_t vaEnd = va + pages * MemoryLayout::PAGE_SIZE;
+        uint8_t segFlags = flags & ~(PMT::PAGE_U | PMT::PAGE_V);
+        if (programHeader.p_flags & PF_X) {
+            segTable->setText(segFlags, va, vaEnd);
+        } else if (programHeader.p_filesz == programHeader.p_memsz) {
+            segTable->setData(segFlags, va, vaEnd);
+        } else {
+            uint64_t dataEnd = MemoryLayout::pageRoundUp(va + programHeader.p_filesz);
+            if (dataEnd > va)
+                segTable->setData(segFlags & ~SegmentDesc::SEG_X, va, dataEnd);
+
+            if (dataEnd < vaEnd)
+                segTable->setBss(SegmentDesc::SEG_R | SegmentDesc::SEG_W, dataEnd, vaEnd);
+        }
     }
     file->close();
     return header.e_entry;

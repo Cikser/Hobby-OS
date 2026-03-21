@@ -28,11 +28,12 @@ Process::Process(PMT* pmt, uint64_t entry, const Process* parent) :
             USER_STACK_SIZE / MemoryLayout::PAGE_SIZE,
             PMT::PAGE_USER
         );
+        m_segTable = new SegmentTable();
+        m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
+            USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
         m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
         m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
         m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
-        m_heapEnd = HEAP_START;
-        m_heapStart = HEAP_START;
     }
 }
 
@@ -48,6 +49,7 @@ Process::~Process() {
         fd->close();
         delete fd;
     }
+    delete m_segTable;
     VM::destroyPMT(m_pmt);
 }
 
@@ -60,8 +62,7 @@ Process* Process::createInit() {
         Console::panic("Process:createInit(): failed to load ELF");
     }
     proc->m_entry = entry;
-    proc->m_heapStart = HEAP_START;
-    proc->m_heapEnd = HEAP_START;
+    proc->m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START, HEAP_START);
     return proc;
 }
 
@@ -75,10 +76,10 @@ Process* Process::fork() {
 
     memcpy(child->m_trapFrame, m_trapFrame, sizeof(TrapFrame));
     child->m_entry = m_trapFrame->sepc;
-    child->m_heapStart = m_heapStart;
-    child->m_heapEnd = m_heapEnd;
     child->m_trapFrame->a0 = 0;
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
+
+    child->m_segTable = SegmentTable::copy(m_segTable);
     return child;
 }
 
@@ -89,43 +90,50 @@ File* Process::getFile(int fd) {
 
 int Process::exec(const char* elfPath) {
     VM::clearUserPages(m_pmt);
+    m_segTable->clear();
     uint64_t entry = ElfLoader::load(elfPath, m_pmt);
     if (!entry) return -1;
     m_entry = entry;
     m_trapFrame->sepc = entry;
     m_trapFrame->sp = USER_STACK_TOP;
-    m_heapEnd = HEAP_START;
-    m_heapStart = HEAP_START;
+
+    m_segTable->setHeap (SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START,  HEAP_START);
+    m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
+        USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
+
     return 0;
 }
 
 uint64_t Process::brk(uint64_t newHeapEnd) {
-    if (newHeapEnd == 0 || newHeapEnd < m_heapStart || newHeapEnd == m_heapEnd) return m_heapEnd;
+    uint64_t heapStart = m_segTable->heap()->start;
+    uint64_t heapEnd = m_segTable->heap()->end;
+    if (newHeapEnd == 0 || newHeapEnd < heapStart || newHeapEnd == heapEnd) return heapEnd;
 
-    if (newHeapEnd > m_heapEnd) {
-        uint32_t pageNum = (newHeapEnd - m_heapEnd) / MemoryLayout::PAGE_SIZE;
+    if (newHeapEnd > heapEnd) {
+        uint32_t pageNum = (newHeapEnd - heapEnd) / MemoryLayout::PAGE_SIZE;
         for (uint32_t i = 0; i < pageNum; i++) {
             auto page = (uint64_t)MemoryAllocator::kallocPage();
             uint64_t pagePa = MemoryLayout::v2p(page);
-            if (m_pmt->mapPage(m_heapEnd, pagePa, PMT::PAGE_USER))
-                m_heapEnd += MemoryLayout::PAGE_SIZE;
+            if (m_pmt->mapPage(heapEnd, pagePa, PMT::PAGE_USER))
+                heapEnd += MemoryLayout::PAGE_SIZE;
             else
                 Console::panic("Process:brk(): failed to map page");
         }
     }
     else {
-        uint32_t pageNum = (m_heapEnd - newHeapEnd) / MemoryLayout::PAGE_SIZE;
+        uint32_t pageNum = (heapEnd - newHeapEnd) / MemoryLayout::PAGE_SIZE;
         for (uint32_t i = 0; i < pageNum; i++) {
-            uint64_t pagePa = m_pmt->translate(m_heapEnd - MemoryLayout::PAGE_SIZE);
-            if (m_pmt->unmapPage(m_heapEnd - MemoryLayout::PAGE_SIZE)) {
+            uint64_t pagePa = m_pmt->translate(heapEnd - MemoryLayout::PAGE_SIZE);
+            if (m_pmt->unmapPage(heapEnd - MemoryLayout::PAGE_SIZE)) {
                 MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pagePa));
-                m_heapEnd -= MemoryLayout::PAGE_SIZE;
+                heapEnd -= MemoryLayout::PAGE_SIZE;
             }
             else
                 Console::panic("Process:brk(): failed to unmap page");
         }
     }
-    return m_heapEnd;
+    m_segTable->heap()->end = heapEnd;
+    return heapEnd;
 }
 
 

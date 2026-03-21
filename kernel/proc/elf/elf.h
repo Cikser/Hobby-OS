@@ -4,6 +4,7 @@
 #include "../../types.h"
 
 class PMT;
+class SegmentTable;
 
 struct Elf64Header {
     uint8_t e_ident[16];
@@ -51,11 +52,12 @@ static constexpr uint16_t EM_RISCV = 243;
 
 class ElfLoader {
 public:
-    static uint64_t load(const char* path, PMT* pmt);
+    static uint64_t load(const char* path, PMT* pmt, SegmentTable* segTable = nullptr);
 
 private:
     static bool validateHeader(const Elf64Header& hdr);
     static uint64_t flagsToPte(uint32_t flags);
+    static uint8_t  elfFlagsToSegFlags(uint32_t pflags);
 };
 
 #endif

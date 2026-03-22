@@ -33,4 +33,6 @@ _ZN3PCB13switchContextEP7ContextS1_:
     ld s10,  96(a1)
     ld s11,  104(a1)
 
+    csrs sstatus, 1 << 1
+
     ret

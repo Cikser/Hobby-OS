@@ -163,7 +163,7 @@ inline void RiscV::mc_sip(uint64_t mask) {
 }
 
 inline void RiscV::ms_sip(uint64_t mask) {
-    __asm__ volatile("csrc sip, %0" :: "r"(mask));
+    __asm__ volatile("csrs sip, %0" :: "r"(mask));
 }
 
 #endif

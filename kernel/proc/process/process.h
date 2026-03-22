@@ -52,6 +52,7 @@ private:
     Process* m_firstChild;
     int m_exitCode;
     Semaphore m_selfSem;
+    Lock m_spaceLock;
 };
 
 #endif

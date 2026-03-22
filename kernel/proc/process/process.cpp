@@ -16,7 +16,8 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
     m_nextSibling(nullptr),
     m_firstChild(nullptr),
     m_exitCode(0),
-    m_selfSem(Semaphore(0))
+    m_selfSem(Semaphore(0)),
+    m_spaceLock(Lock())
 {
     if (parent) {
         for (int i = 0; i < MAX_FDS; i++) {
@@ -61,16 +62,18 @@ Process* Process::createInit() {
     PMT* pmt = VM::createPMT();
     auto proc = new Process(pmt, -1, nullptr);
 
-    uint64_t entry = ElfLoader::load("/bin/init", pmt);
-    if (!entry) {
-        Console::panic("Process:createInit(): failed to load ELF");
-    }
+    uint64_t entry = ElfLoader::load("/bin/init", pmt, proc->m_segTable);
+    if (!entry)
+        Console::panic("Process::createInit(): failed to load ELF");
+
     proc->m_entry = entry;
     proc->m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START, HEAP_START);
     return proc;
 }
 
 Process* Process::fork() {
+    m_spaceLock.acquire();
+
     PMT* pmt = VM::createPMT();
     VM::copyPMT(pmt, m_pmt);
     auto child = new Process(pmt, -1, this);
@@ -84,7 +87,8 @@ Process* Process::fork() {
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
 
     child->m_segTable = SegmentTable::copy(m_segTable);
-
+    m_spaceLock.release();
+    m_lock.acquire();
     if (!m_firstChild) {
         m_firstChild = child;
     }
@@ -92,34 +96,50 @@ Process* Process::fork() {
         child->m_nextSibling = m_firstChild;
         m_firstChild = child;
     }
+    m_lock.release();
     return child;
 }
 
 File* Process::getFile(int fd) {
-    if (fd < 0 || fd >= MAX_FDS || !m_fds[fd]) return nullptr;
-    return m_fds[fd];
+    if (fd < 0 || fd >= MAX_FDS) return nullptr;
+
+    m_lock.acquire();
+    File* f = m_fds[fd];
+    m_lock.release();
+
+    return f;
 }
 
 int Process::exec(const char* elfPath) {
+    m_spaceLock.acquire();
     VM::clearUserPages(m_pmt);
     m_segTable->clear();
     uint64_t entry = ElfLoader::load(elfPath, m_pmt, m_segTable);
-    if (!entry) return -1;
+    if (!entry) {
+        m_spaceLock.release();
+        return -1;
+    }
+
     m_entry = entry;
     m_trapFrame->sepc = entry;
     m_trapFrame->sp = USER_STACK_TOP;
-
-    m_segTable->setHeap (SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START,  HEAP_START);
+    m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START,HEAP_START);
     m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
         USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
-
+    m_spaceLock.release();
     return 0;
 }
 
 uint64_t Process::brk(uint64_t newHeapEnd) {
+    m_spaceLock.acquire();
+
     uint64_t heapStart = m_segTable->heap()->start;
     uint64_t heapEnd = m_segTable->heap()->end;
-    if (newHeapEnd == 0 || newHeapEnd < heapStart || newHeapEnd == heapEnd) return heapEnd;
+
+    if (newHeapEnd == 0 || newHeapEnd < heapStart || newHeapEnd == heapEnd) {
+        m_spaceLock.release();
+        return heapEnd;
+    }
 
     if (newHeapEnd > heapEnd) {
         uint32_t pageNum = (newHeapEnd - heapEnd) / MemoryLayout::PAGE_SIZE;
@@ -129,7 +149,7 @@ uint64_t Process::brk(uint64_t newHeapEnd) {
             if (m_pmt->mapPage(heapEnd, pagePa, PMT::PAGE_USER))
                 heapEnd += MemoryLayout::PAGE_SIZE;
             else
-                Console::panic("Process:brk(): failed to map page");
+                Console::panic("Process::brk(): failed to map page");
         }
     }
     else {
@@ -141,34 +161,49 @@ uint64_t Process::brk(uint64_t newHeapEnd) {
                 heapEnd -= MemoryLayout::PAGE_SIZE;
             }
             else
-                Console::panic("Process:brk(): failed to unmap page");
+                Console::panic("Process::brk(): failed to unmap page");
         }
     }
     m_segTable->heap()->end = heapEnd;
+
+    m_spaceLock.release();
     return heapEnd;
 }
-
 
 uint64_t Process::openFile(char* path, uint64_t flags) {
     File* file = VFS::open(path, flags);
     if (!file) return -1;
+
+    m_lock.acquire();
     for (int i = 0; i < MAX_FDS; i++) {
         if (!m_fds[i]) {
             m_fds[i] = file;
+            m_lock.release();
             return i;
         }
     }
+    m_lock.release();
+
+    file->close();
+    delete file;
     return -1;
 }
 
 int Process::closeFile(int fd) {
-    if (getFile(fd)) {
-        m_fds[fd]->close();
-        delete m_fds[fd];
-        m_fds[fd] = nullptr;
-        return 0;
+    if (fd < 0 || fd >= MAX_FDS) return -1;
+
+    m_lock.acquire();
+    File* f = m_fds[fd];
+    if (!f) {
+        m_lock.release();
+        return -1;
     }
-    return -1;
+    m_fds[fd] = nullptr;
+    m_lock.release();
+
+    f->close();
+    delete f;
+    return 0;
 }
 
 void Process::exit(int exitCode) {
@@ -176,40 +211,67 @@ void Process::exit(int exitCode) {
     while (m_waitSem.waiting()) {
         m_waitSem.signal();
     }
-    if (m_parent && m_parent->m_selfSem.waiting()) {
-        m_parent->m_selfSem.signal();
+
+    if (m_parent) {
+        m_parent->m_lock.acquire();
+        bool waiting = m_parent->m_selfSem.waiting();
+        m_parent->m_lock.release();
+
+        if (waiting)
+            m_parent->m_selfSem.signal();
     }
     m_state = ProcState::ZOMBIE;
     dispatch();
 }
 
 pid_t Process::wait(pid_t pid, int* status) {
-    if (!m_firstChild) return -1;
+    m_lock.acquire();
+    if (!m_firstChild) {
+        m_lock.release();
+        return -1;
+    }
 
     if (pid != -1) {
         bool found = false;
         for (Process* c = m_firstChild; c; c = c->m_nextSibling) {
             if (c->m_pid == pid) { found = true; break; }
         }
-        if (!found) return -1;
+        if (!found) {
+            m_lock.release();
+            return -1;
+        }
     }
+    m_lock.release();
 
     m_selfSem.wait();
 
+    m_lock.acquire();
     Process* zombie = nullptr;
+    Process* prev = nullptr;
     for (Process* c = m_firstChild; c; c = c->m_nextSibling) {
-        if (c->m_state == ProcState::ZOMBIE) {
-            if (pid == -1 || c->m_pid == pid) {
-                zombie = c;
-                break;
-            }
+        if (c->m_state == ProcState::ZOMBIE &&
+            (pid == -1 || c->m_pid == pid)) {
+            zombie = c;
+            break;
         }
+        prev = c;
     }
 
-    if (!zombie) return -1;
+    if (!zombie) {
+        m_lock.release();
+        return -1;
+    }
+
+    if (prev)
+        prev->m_nextSibling = zombie->m_nextSibling;
+    else
+        m_firstChild = zombie->m_nextSibling;
+
+    m_lock.release();
 
     pid_t retPid = zombie->m_pid;
     if (status) *status = zombie->m_exitCode;
 
+    delete zombie;
     return retPid;
 }

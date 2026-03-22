@@ -94,8 +94,10 @@ protected:
     uint64_t m_entry;
     void* m_args;
     Semaphore m_waitSem;
+    Lock m_lock;
 
     static pid_t s_pid;
+    static Lock s_pidLock;
 };
 
 #endif

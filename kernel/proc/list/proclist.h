@@ -3,12 +3,13 @@
 
 #include "../../types.h"
 #include "../../mm/kalloc/kmem_cache.h"
+#include "../sync/lock.h"
 
 class PCB;
 
 class ProcList {
 public:
-    ProcList() : m_head(nullptr), m_tail(nullptr) {}
+    ProcList() : m_head(nullptr), m_tail(nullptr), m_lock(Lock()) {}
     ~ProcList();
 
     void* operator new(size_t size) {
@@ -31,6 +32,7 @@ private:
 
     PCB* m_head;
     PCB* m_tail;
+    mutable Lock m_lock;
 };
 
 #endif

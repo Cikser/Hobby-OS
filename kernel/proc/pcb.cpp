@@ -7,9 +7,9 @@
 pid_t PCB::s_pid = 0;
 PCB* PCB::s_running = nullptr;
 time_t PCB::s_timeSliceCounter = 0;
+Lock PCB::s_pidLock = Lock();
 
 PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
-    m_pid(s_pid++),
     m_state(ProcState::READY),
     m_pmt(pmt),
     m_next(nullptr),
@@ -19,8 +19,12 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_usermode(usermode),
     m_entry(entry),
     m_args(nullptr),
-    m_waitSem(Semaphore(0))
+    m_waitSem(Semaphore(0)),
+    m_lock(Lock())
 {
+    s_pidLock.acquire();
+    m_pid = s_pid++;
+    s_pidLock.release();
     if (entry) {
         m_kstack = (uint8_t*)MemoryAllocator::kallocPages(KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
         m_trapFrame = (TrapFrame*)(m_kstack + KERNEL_STACK_SIZE - sizeof(TrapFrame));
@@ -62,6 +66,7 @@ void PCB::pcbEntry() {
             : "memory"
         );
     } else {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
         ((void(*)(void*))current->m_entry)(current->m_args);
         current->exit();
     }
@@ -69,6 +74,7 @@ void PCB::pcbEntry() {
 
 void PCB::dispatch() {
     if (Scheduler::empty()) return;
+    RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
     s_timeSliceCounter = 0;
     PCB* current = s_running;
     if (current->m_state == ProcState::RUNNING) {

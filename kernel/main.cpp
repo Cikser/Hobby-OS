@@ -19,12 +19,11 @@ void runTests(void* arg) {
 
 void printPid(void* arg) {
 	Console::kprintf("Printing pid: %ld\n", PCB::currentPid());
-	((Semaphore*)arg)->signal();
 }
 
 void printSleep(void* arg) {
 	Console::kprintf("Sleeping pid: %ld\n", PCB::currentPid());
-	PCB::sleep(PCB::running()->pid() * 1000);
+	PCB::sleep(1000);
 	Console::kprintf("Finished sleeping pid: %ld\n", PCB::currentPid());
 }
 
@@ -38,7 +37,11 @@ int main() {
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
 
-	while (initProc->state() != ProcState::ZOMBIE) PCB::dispatch();
+	auto t1 = new Thread(printSleep);
+	auto t2 = new Thread(printPid);
+
+	while (initProc->state() != ProcState::ZOMBIE || t1->state() != ProcState::ZOMBIE
+		|| t2->state() != ProcState::ZOMBIE) PCB::dispatch();
 
 	Console::kprintf("back in main\n");
 

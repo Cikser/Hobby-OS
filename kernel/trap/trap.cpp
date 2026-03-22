@@ -1,5 +1,6 @@
 #include "trap.h"
 
+#include "scheduler.h"
 #include "../hw/riscv.h"
 #include "../io/console/console.h"
 #include "../proc/pcb.h"
@@ -36,10 +37,14 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             trapFrame->sepc += 4;
         }*/
         case TIMER_INTERRUPT: {
-            RiscV::mc_sip(RiscV::SIP_STIP);
-            uint64_t sstatus = RiscV::r_sstatus();
-            PCB::dispatch();
-            RiscV::w_sstatus(sstatus);
+            RiscV::mc_sip(RiscV::SIP_SSIP);
+            Scheduler::awake();
+            PCB::s_timeSliceCounter++;
+            if (PCB::s_timeSliceCounter >= PCB::running()->m_timeSlice) {
+                uint64_t sstatus = RiscV::r_sstatus();
+                PCB::dispatch();
+                RiscV::w_sstatus(sstatus);
+            }
             break;
         }
         /*case EXTERNAL_INTERRUPT: {

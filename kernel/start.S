@@ -46,7 +46,7 @@ _start:
 
     li   t0, 0x200BFF8
     ld   t1, 0(t0)
-    li   t2, 1000000
+    li   t2, 10000
     add  t1, t1, t2
     li   t0, 0x2004000
     sd   t1, 0(t0)

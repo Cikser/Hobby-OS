@@ -8,6 +8,7 @@
 #include "../mm/vm/segment.h"
 
 typedef uint64_t pid_t;
+typedef uint64_t time_t;
 
 enum class ProcState {
     READY,
@@ -44,6 +45,7 @@ public:
 
     void exit();
     static void dispatch();
+    static void sleep(time_t sleepTime);
 
     pid_t pid() const { return m_pid; }
     ProcState state() const { return m_state; }
@@ -62,6 +64,9 @@ public:
 protected:
     friend class Scheduler;
     friend class ProcList;
+    friend class TrapHandler;
+
+    static constexpr time_t DEFAULT_TIME_SLICE = 2;
 
     PCB(uint64_t entry, PMT* pmt, bool usermode = true);
 
@@ -69,6 +74,7 @@ protected:
     static void switchContext(Context* current, Context* next);
 
     static PCB* s_running;
+    static time_t s_timeSliceCounter;
 
     pid_t m_pid;
     ProcState m_state;
@@ -78,6 +84,9 @@ protected:
     uint8_t* m_ustack;
     PMT* m_pmt;
     PCB* m_next;
+    PCB* m_nextSleep;
+    time_t m_relativeSleepTime;
+    time_t m_timeSlice;
     bool m_usermode;
     uint64_t m_entry;
     void* m_args;

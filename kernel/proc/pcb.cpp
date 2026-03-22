@@ -6,12 +6,16 @@
 
 pid_t PCB::s_pid = 0;
 PCB* PCB::s_running = nullptr;
+time_t PCB::s_timeSliceCounter = 0;
 
 PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_pid(s_pid++),
     m_state(ProcState::READY),
     m_pmt(pmt),
     m_next(nullptr),
+    m_nextSleep(nullptr),
+    m_relativeSleepTime(0),
+    m_timeSlice(DEFAULT_TIME_SLICE),
     m_usermode(usermode),
     m_entry(entry),
     m_args(nullptr)
@@ -68,6 +72,7 @@ void PCB::exit() {
 
 void PCB::dispatch() {
     if (Scheduler::empty()) return;
+    s_timeSliceCounter = 0;
     PCB* current = s_running;
     if (current->m_state == ProcState::RUNNING) {
         current->m_state = ProcState::READY;
@@ -97,4 +102,10 @@ void PCB::dispatch() {
 PCB::~PCB() {
     if (m_kstack)
         MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+}
+
+void PCB::sleep(time_t sleepTime) {
+    s_running->setState(ProcState::SLEEPING);
+    Scheduler::putSleep(s_running, sleepTime);
+    dispatch();
 }

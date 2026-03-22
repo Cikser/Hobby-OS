@@ -22,6 +22,12 @@ void printPid(void* arg) {
 	((Semaphore*)arg)->signal();
 }
 
+void printSleep(void* arg) {
+	Console::kprintf("Sleeping pid: %ld\n", PCB::currentPid());
+	PCB::sleep(PCB::running()->pid() * 1000);
+	Console::kprintf("Finished sleeping pid: %ld\n", PCB::currentPid());
+}
+
 int main() {
     TrapHandler::init();
 	MemoryAllocator::init();
@@ -30,9 +36,24 @@ int main() {
 	auto main = new Thread(nullptr);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
-	Process* initProc = Process::createInit();
+	//Process* initProc = Process::createInit();
 
-	while (!Scheduler::empty()) PCB::dispatch();
+	Thread* threads[5];
+	for (int i = 0; i < 5; i++) {
+		threads[i] = new Thread(printSleep);
+	}
+
+
+	while (true) {
+		if (threads[0]->state() == ProcState::ZOMBIE &&
+			threads[1]->state() == ProcState::ZOMBIE &&
+			threads[2]->state() == ProcState::ZOMBIE &&
+			threads[3]->state() == ProcState::ZOMBIE &&
+			threads[4]->state() == ProcState::ZOMBIE) {
+			RiscV::stopEmulation();
+		}
+	}
+	//while (!Scheduler::empty()) PCB::dispatch();
 
 	Console::kprintf("back in main\n");
 

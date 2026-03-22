@@ -198,12 +198,13 @@ _ZN11TrapHandler9timerTrapEv:
 
     li   t1, 0x200BFF8
     ld   t1, 0(t1)
-    li   t0, 1000000
+    li   t0, 10000
     add  t1, t1, t0
     li   t0, 0x2004000
     sd   t1, 0(t0)
 
-    li   t0, (1 << 5)
+    li   t0, (1 << 1)
+    csrs mip, t0
 
     ld   t0, 0(sp)
     ld   t1, 8(sp)

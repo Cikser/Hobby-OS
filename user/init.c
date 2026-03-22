@@ -18,6 +18,7 @@ static long syscall(long num, long a0, long a1, long a2, long a3) {
 #define SYS_GETPID  172
 #define SYS_FORK    220
 #define SYS_EXIT    93
+#define SYS_WAIT4   260
 
 void _start() {
     const char* msg = "Hello from userspace!\n";
@@ -36,6 +37,7 @@ void _start() {
         syscall(SYS_WRITE, 1, (long)buf, 256, 0);
         syscall(SYS_WRITE, 1, (long)"After write\n", 12, 0);
     } else {
+        syscall(SYS_WAIT4, -1, 0, 0, 0);
         syscall(SYS_WRITE, 1, (long)"I am parent\n", 12, 0);
     }
     syscall(SYS_EXIT, 0, 0, 0, 0);

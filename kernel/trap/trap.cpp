@@ -19,6 +19,8 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
     uint64_t stval = RiscV::r_stval();
     uint64_t scause = RiscV::r_scause();
     uint64_t sepc = RiscV::r_sepc();
+    RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
+    RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
     switch (scause) {
         case SYSCALL: {
             trapFrame->sepc += 4;

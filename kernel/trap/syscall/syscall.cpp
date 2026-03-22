@@ -4,6 +4,7 @@
 #include "../../fs/file.h"
 #include "../../hw/riscv.h"
 #include "../../mm/mem.h"
+#include "../../proc/process/process.h"
 
 class Process;
 
@@ -12,8 +13,8 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_EXIT: tf->a0 = sys_exit(tf); break;
     case SYS_GETPID: tf->a0 = sys_getpid(tf); break;
     case SYS_FORK: tf->a0 = sys_fork(tf); break;
-    //case SYS_EXECVE:  tf->a0 = sys_execve(tf); break;
-    //case SYS_WAIT4: tf->a0 = sys_wait4(tf); break;
+    case SYS_EXECVE:  tf->a0 = sys_execve(tf); break;
+    case SYS_WAIT4: tf->a0 = sys_wait4(tf); break;
     case SYS_READ: tf->a0 = sys_read(tf); break;
     case SYS_WRITE: tf->a0 = sys_write(tf); break;
     case SYS_OPENAT: tf->a0 = sys_openat(tf); break;
@@ -92,4 +93,35 @@ uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
     int fd = tf->a0;
     return PCB::running()->closeFile(fd);
+}
+
+uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
+    uint64_t pathAddr = tf->a0;
+
+    char path[256];
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    strcpy(path, (char*)pathAddr);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    auto* proc = PCB::running();
+
+    return proc->exec(path);
+}
+
+uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
+    pid_t pid = tf->a0;
+    uint64_t statusAddr = tf->a1;
+
+    auto proc = PCB::running();
+
+    int status = 0;
+    pid_t ret = proc->wait(pid, statusAddr ? &status : nullptr);
+
+    if (statusAddr) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *(int*)statusAddr = status;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+
+    return ret;
 }

@@ -6,6 +6,7 @@
 #include "../trap/trapframe.h"
 #include "../mm/vm/pmt.h"
 #include "../mm/vm/segment.h"
+#include "../sync/sem.h"
 
 typedef uint64_t pid_t;
 typedef uint64_t time_t;
@@ -43,7 +44,6 @@ public:
 
     virtual ~PCB();
 
-    void exit();
     static void dispatch();
     static void sleep(time_t sleepTime);
 
@@ -60,6 +60,9 @@ public:
     virtual uint64_t openFile(char* path, uint64_t flags) = 0;
     virtual int closeFile(int fd) = 0;
     virtual SegmentTable* segmentTable() const = 0;
+    virtual void exit(int exitCode = 0) = 0;
+    virtual pid_t wait(pid_t pid, int* status = nullptr) = 0;
+    virtual int exec(const char* elfPath) = 0;
 
 protected:
     friend class Scheduler;
@@ -90,6 +93,7 @@ protected:
     bool m_usermode;
     uint64_t m_entry;
     void* m_args;
+    Semaphore m_waitSem;
 
     static pid_t s_pid;
 };

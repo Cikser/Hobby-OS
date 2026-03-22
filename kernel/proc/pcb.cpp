@@ -18,7 +18,8 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_timeSlice(DEFAULT_TIME_SLICE),
     m_usermode(usermode),
     m_entry(entry),
-    m_args(nullptr)
+    m_args(nullptr),
+    m_waitSem(Semaphore(0))
 {
     if (entry) {
         m_kstack = (uint8_t*)MemoryAllocator::kallocPages(KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
@@ -41,6 +42,7 @@ extern "C" void _trap_user_entry();
 extern "C" void _trap_kernel_entry();
 
 void PCB::pcbEntry() {
+    RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
     PCB* current = s_running;
 
     if (current->m_usermode) {
@@ -63,11 +65,6 @@ void PCB::pcbEntry() {
         ((void(*)(void*))current->m_entry)(current->m_args);
         current->exit();
     }
-}
-
-void PCB::exit() {
-    m_state = ProcState::ZOMBIE;
-    dispatch();
 }
 
 void PCB::dispatch() {

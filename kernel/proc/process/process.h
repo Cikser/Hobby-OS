@@ -22,7 +22,7 @@ public:
     }
 
     static Process* createInit();
-    int exec(const char* elfPath);
+    int exec(const char* elfPath) override;
     Thread* createThread(void(*entry)(void*));
 
     Process* fork() override;
@@ -31,6 +31,8 @@ public:
     uint64_t openFile(char* path, uint64_t flags) override;
     int closeFile(int fd) override;
     SegmentTable* segmentTable() const override { return m_segTable; };
+    void exit(int exitCode) override;
+    pid_t wait(pid_t pid, int* status) override;
 
 private:
     friend class Thread;
@@ -40,12 +42,16 @@ private:
 
     static KMemCache<Process>* s_cache;
 
-    Process(PMT* pmt, uint64_t entry, const Process* parent);
+    Process(PMT* pmt, uint64_t entry, Process* parent);
 
     Thread* m_threads;
-    const Process* m_parent;
+    Process* m_parent;
     File* m_fds[MAX_FDS]{};
     SegmentTable* m_segTable;
+    Process* m_nextSibling;
+    Process* m_firstChild;
+    int m_exitCode;
+    Semaphore m_selfSem;
 };
 
 #endif

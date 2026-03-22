@@ -1,6 +1,10 @@
 #ifndef RISC_V_PROCLIST_H
 #define RISC_V_PROCLIST_H
-#include "../pcb.h"
+
+#include "../../types.h"
+#include "../../mm/kalloc/kmem_cache.h"
+
+class PCB;
 
 class ProcList {
 public:

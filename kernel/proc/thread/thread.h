@@ -27,6 +27,9 @@ public:
     uint64_t openFile(char* path, uint64_t flags) override { return m_parent->openFile(path, flags); };
     int closeFile(int fd) override { return m_parent->closeFile(fd); }
     SegmentTable* segmentTable() const override { return m_parent->segmentTable(); }
+    void exit(int exitCode) override;
+    pid_t wait(pid_t pid, int* status) override { return -1; }
+    int exec(const char* elfPath) override { return -1; }
 
 private:
     friend class Process;

@@ -34,26 +34,11 @@ int main() {
 	Disk::init();
 	VFS::init();
 	auto main = new Thread(nullptr);
+	Process* initProc = Process::createInit();
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
-	//Process* initProc = Process::createInit();
 
-	Thread* threads[5];
-	for (int i = 0; i < 5; i++) {
-		threads[i] = new Thread(printSleep);
-	}
-
-
-	while (true) {
-		if (threads[0]->state() == ProcState::ZOMBIE &&
-			threads[1]->state() == ProcState::ZOMBIE &&
-			threads[2]->state() == ProcState::ZOMBIE &&
-			threads[3]->state() == ProcState::ZOMBIE &&
-			threads[4]->state() == ProcState::ZOMBIE) {
-			RiscV::stopEmulation();
-		}
-	}
-	//while (!Scheduler::empty()) PCB::dispatch();
+	while (initProc->state() != ProcState::ZOMBIE) PCB::dispatch();
 
 	Console::kprintf("back in main\n");
 

@@ -1,4 +1,5 @@
 #include "proclist.h"
+#include "../pcb.h"
 
 KMemCache<ProcList>* ProcList::s_cache = nullptr;
 

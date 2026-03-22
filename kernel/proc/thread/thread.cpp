@@ -38,3 +38,11 @@ Thread::~Thread() {
     if (m_ustack)
         MemoryAllocator::kfreePages(m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
 }
+
+void Thread::exit(int exitCode) {
+    while (m_waitSem.waiting()) {
+        m_waitSem.signal();
+    }
+    m_state = ProcState::ZOMBIE;
+    dispatch();
+}

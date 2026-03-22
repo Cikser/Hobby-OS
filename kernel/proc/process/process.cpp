@@ -9,10 +9,14 @@
 
 KMemCache<Process>* Process::s_cache = nullptr;
 
-Process::Process(PMT* pmt, uint64_t entry, const Process* parent) :
+Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
     PCB(entry, pmt),
     m_threads(nullptr),
-    m_parent(parent)
+    m_parent(parent),
+    m_nextSibling(nullptr),
+    m_firstChild(nullptr),
+    m_exitCode(0),
+    m_selfSem(Semaphore(0))
 {
     if (parent) {
         for (int i = 0; i < MAX_FDS; i++) {
@@ -80,6 +84,14 @@ Process* Process::fork() {
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
 
     child->m_segTable = SegmentTable::copy(m_segTable);
+
+    if (!m_firstChild) {
+        m_firstChild = child;
+    }
+    else {
+        child->m_nextSibling = m_firstChild;
+        m_firstChild = child;
+    }
     return child;
 }
 
@@ -91,7 +103,7 @@ File* Process::getFile(int fd) {
 int Process::exec(const char* elfPath) {
     VM::clearUserPages(m_pmt);
     m_segTable->clear();
-    uint64_t entry = ElfLoader::load(elfPath, m_pmt);
+    uint64_t entry = ElfLoader::load(elfPath, m_pmt, m_segTable);
     if (!entry) return -1;
     m_entry = entry;
     m_trapFrame->sepc = entry;
@@ -157,4 +169,47 @@ int Process::closeFile(int fd) {
         return 0;
     }
     return -1;
+}
+
+void Process::exit(int exitCode) {
+    m_exitCode = exitCode;
+    while (m_waitSem.waiting()) {
+        m_waitSem.signal();
+    }
+    if (m_parent && m_parent->m_selfSem.waiting()) {
+        m_parent->m_selfSem.signal();
+    }
+    m_state = ProcState::ZOMBIE;
+    dispatch();
+}
+
+pid_t Process::wait(pid_t pid, int* status) {
+    if (!m_firstChild) return -1;
+
+    if (pid != -1) {
+        bool found = false;
+        for (Process* c = m_firstChild; c; c = c->m_nextSibling) {
+            if (c->m_pid == pid) { found = true; break; }
+        }
+        if (!found) return -1;
+    }
+
+    m_selfSem.wait();
+
+    Process* zombie = nullptr;
+    for (Process* c = m_firstChild; c; c = c->m_nextSibling) {
+        if (c->m_state == ProcState::ZOMBIE) {
+            if (pid == -1 || c->m_pid == pid) {
+                zombie = c;
+                break;
+            }
+        }
+    }
+
+    if (!zombie) return -1;
+
+    pid_t retPid = zombie->m_pid;
+    if (status) *status = zombie->m_exitCode;
+
+    return retPid;
 }

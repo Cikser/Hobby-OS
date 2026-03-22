@@ -3,6 +3,7 @@
 
 #include "../../types.h"
 #include "memlayout.h"
+#include "../../proc/sync/lock.h"
 
 class Buddy {
 
@@ -24,6 +25,7 @@ private:
 
     static void* m_startAddr;
     static int m_buddy[];
+    static Lock m_lock;
 
     static void* blockToPtr(const uint64_t block) { return (void*)((uint64_t)m_startAddr + block * MemoryLayout::PAGE_SIZE); }
     static int ptrToBlock(const void* ptr) { return (int)(((uint64_t)ptr - (uint64_t)m_startAddr) / MemoryLayout::PAGE_SIZE); }

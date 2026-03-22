@@ -1,9 +1,11 @@
 #include "console.h"
 #include "../../hw/riscv.h"
 
+Lock Console::m_lock = Lock();
+
 void Console::kputc(const char ch){
     while ((readReg(CONSOLE_STATUS) & CONSOLE_TX_STATUS_BIT) == 0){}
-	writeReg(CONSOLE_TX_DATA, ch);
+    writeReg(CONSOLE_TX_DATA, ch);
 }
 
 void Console::kputs(const char* s){
@@ -27,7 +29,6 @@ void Console::kputulong(const uint64_t xx, const uint32_t base){
 
     while(--i >= 0)
         kputc(buf[i]);
-
 }
 
 void Console::panic(const char *s) {
@@ -71,6 +72,8 @@ void Console::kputi(const int64_t xx, const uint32_t base) {
 }
 
 void Console::kprintf(const char* fmt, ...) {
+    m_lock.acquire();
+
     __builtin_va_list args;
     __builtin_va_start(args, fmt);
 
@@ -123,4 +126,6 @@ void Console::kprintf(const char* fmt, ...) {
         }
     }
     __builtin_va_end(args);
+
+    m_lock.release();
 }

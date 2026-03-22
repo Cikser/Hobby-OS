@@ -3,6 +3,7 @@
 
 #include "../../types.h"
 #include "slab.h"
+#include "../../proc/sync/lock.h"
 
 class MemCache {
 public:
@@ -20,6 +21,7 @@ protected:
     Slab *m_full, *m_empty, *m_partial;
     size_t m_slabSize;
     uint64_t m_objSize;
+    Lock m_lock;
 
     void setObjSize(const uint64_t objSize);
 
@@ -46,4 +48,4 @@ public:
     void operator delete(void *obj) { s_memCache.free(obj); }
 };
 
-#endif //RISC_V_KMEM_CACHE_H
+#endif

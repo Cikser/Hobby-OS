@@ -3,17 +3,22 @@
 ProcList* Scheduler::m_list = nullptr;
 PCB* Scheduler::m_sleepHead = nullptr;
 PCB* Scheduler::m_sleepTail = nullptr;
+Lock Scheduler::m_lock = Lock();
 
 void Scheduler::put(PCB* pcb) {
+    m_lock.acquire();
     if (!m_list) {
         m_list = new ProcList();
     }
     m_list->put(pcb);
+    m_lock.release();
 }
 
 PCB* Scheduler::get() {
-    if (!m_list) return nullptr;
-    return m_list->get();
+    m_lock.acquire();
+    PCB* pcb = m_list ? m_list->get() : nullptr;
+    m_lock.release();
+    return pcb;
 }
 
 PCB* Scheduler::getSleep() {
@@ -28,10 +33,13 @@ PCB* Scheduler::getSleep() {
 }
 
 void Scheduler::putSleep(PCB* pcb, time_t sleepTime) {
+    m_lock.acquire();
+
     if (!m_sleepHead) {
         m_sleepHead = m_sleepTail = pcb;
         pcb->m_relativeSleepTime = sleepTime;
         pcb->m_nextSleep = nullptr;
+        m_lock.release();
         return;
     }
 
@@ -51,24 +59,34 @@ void Scheduler::putSleep(PCB* pcb, time_t sleepTime) {
     if (cur)
         cur->m_relativeSleepTime -= pcb->m_relativeSleepTime;
 
-    if (!prev) {
+    if (!prev)
         m_sleepHead = pcb;
-    } else {
+    else
         prev->m_nextSleep = pcb;
-    }
 
     if (!cur)
         m_sleepTail = pcb;
+
+    m_lock.release();
 }
 
 void Scheduler::awake() {
-    if (!m_sleepHead) return;
+    m_lock.acquire();
 
-    PCB* head = m_sleepHead;
-    head->m_relativeSleepTime--;
-    while (canAwake()) {
+    if (!m_sleepHead) {
+        m_lock.release();
+        return;
+    }
+
+    m_sleepHead->m_relativeSleepTime--;
+
+    while (m_sleepHead && m_sleepHead->m_relativeSleepTime == 0) {
         PCB* pcb = getSleep();
         pcb->setState(ProcState::READY);
+        m_lock.release();
         put(pcb);
+        m_lock.acquire();
     }
+
+    m_lock.release();
 }

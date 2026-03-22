@@ -3,6 +3,7 @@
 
 #include "../../types.h"
 #include "uart.h"
+#include "../../proc/sync/lock.h"
 
 class Console {
 
@@ -19,7 +20,8 @@ private:
 
     static uint8_t readReg(uint32_t offset);
     static void writeReg(uint32_t offset, uint8_t value);
-    
+
+    static Lock m_lock;
 };
 
 inline void Console::writeReg(uint32_t offset, uint8_t value) {

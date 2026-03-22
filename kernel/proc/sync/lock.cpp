@@ -1,8 +1,6 @@
 #include "lock.h"
 #include "../../hw/riscv.h"
 
-KMemCache<Lock>* Lock::s_cache = nullptr;
-
 void Lock::acquire() {
     m_pie = RiscV::r_sstatus() & RiscV::SSTATUS_SIE;
     RiscV::mc_sstatus(RiscV::SSTATUS_SIE);

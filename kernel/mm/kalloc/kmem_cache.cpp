@@ -6,13 +6,15 @@ MemCache MemCache::s_metaCache(sizeof(Slab));
 MemCache MemCache::s_memCache(sizeof(MemCache));
 
 MemCache::MemCache(const uint64_t objSize) : m_full(nullptr), m_empty(nullptr),
-                                            m_partial(nullptr), m_objSize(objSize) {
+                                             m_partial(nullptr), m_objSize(objSize), m_lock(Lock()) {
     int pow = MemoryLayout::PAGE_SHIFT;
     while (m_objSize > 1 << pow) pow++;
     m_slabSize = 1 << pow;
 }
 
 void* MemCache::alloc() {
+    m_lock.acquire();
+
     void* ret = nullptr;
     if (!m_partial) {
         if (!m_empty) {
@@ -28,10 +30,14 @@ void* MemCache::alloc() {
         m_full = m_partial;
         m_partial = temp;
     }
+
+    m_lock.release();
     return ret;
 }
 
 int MemCache::free(void *obj) {
+    m_lock.acquire();
+
     Slab* it = m_partial, *prev = nullptr;
     while (it) {
         if (it->contains(obj)) {
@@ -46,6 +52,7 @@ int MemCache::free(void *obj) {
                 it->next = m_empty;
                 m_empty = it;
             }
+            m_lock.release();
             return 0;
         }
         prev = it;
@@ -63,20 +70,25 @@ int MemCache::free(void *obj) {
             }
             it->next = m_partial;
             m_partial = it;
+            m_lock.release();
             return 0;
         }
         prev = it;
         it = it->next;
     }
+
+    m_lock.release();
     return -1;
 }
 
 void MemCache::shrink() {
+    m_lock.acquire();
     while (m_empty) {
         Slab* it = m_empty;
         m_empty = m_empty->next;
         Slab::destroy(it);
     }
+    m_lock.release();
 }
 
 void MemCache::setObjSize(const uint64_t objSize) {
@@ -85,4 +97,3 @@ void MemCache::setObjSize(const uint64_t objSize) {
     while (m_objSize > 1 << pow) pow++;
     m_slabSize = 1 << pow;
 }
-

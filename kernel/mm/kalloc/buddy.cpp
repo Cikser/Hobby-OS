@@ -8,6 +8,7 @@ const uint32_t Buddy::PAGE_SIZE = MemoryLayout::PAGE_SIZE;
 
 int Buddy::m_buddy[BUDDY_SIZE];
 void* Buddy::m_startAddr = nullptr;
+Lock Buddy::m_lock;
 
 void Buddy::init() {
     m_startAddr = (void*)MemoryLayout::pageRoundUp(MemoryLayout::HEAP_START);
@@ -20,9 +21,9 @@ void Buddy::init() {
     while(blockNum > 0 && i >= 0){
         int size = 1 << i;
         if(blockNum >= size){
-            if(m_buddy[i] == - 1){
+            if(m_buddy[i] == -1){
                 m_buddy[i] = block;
-                putAtBlock(block, - 1);
+                putAtBlock(block, -1);
             }
             else{
                 putAtBlock(block, m_buddy[i]);
@@ -51,7 +52,9 @@ void Buddy::print() {
     Console::kprintf("\n");
 }
 
-void *Buddy::alloc(size_t size) {
+void* Buddy::alloc(size_t size) {
+    m_lock.acquire();
+
     int i = 0;
     while(size > (1 << (START_POW + i))){
         i++;
@@ -61,6 +64,7 @@ void *Buddy::alloc(size_t size) {
         diff++;
     }
     if(entry + diff >= BUDDY_SIZE){
+        m_lock.release();
         return nullptr;
     }
     void* alloc = nullptr;
@@ -76,14 +80,20 @@ void *Buddy::alloc(size_t size) {
     }
     alloc = blockToPtr(m_buddy[entry]);
     m_buddy[entry] = getAtBlock(m_buddy[entry]);
+
+    m_lock.release();
     return alloc;
 }
 
 void Buddy::free(void* ptr, size_t size) {
+    m_lock.acquire();
+
     int block = ptrToBlock(ptr);
     int entry = (size - 1) / MemoryLayout::PAGE_SIZE;
     putBlock(entry, block);
     merge(entry);
+
+    m_lock.release();
 }
 
 void Buddy::putBlock(int entry, int block) {

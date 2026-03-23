@@ -213,13 +213,9 @@ void Process::exit(int exitCode) {
     }
 
     if (m_parent) {
-        m_parent->m_lock.acquire();
-        bool waiting = m_parent->m_selfSem.waiting();
-        m_parent->m_lock.release();
-
-        if (waiting)
-            m_parent->m_selfSem.signal();
+        m_parent->m_selfSem.signal();
     }
+
     m_state = ProcState::ZOMBIE;
     dispatch();
 }

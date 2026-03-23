@@ -55,6 +55,13 @@ void PCB::pcbEntry() {
         RiscV::w_stvec((uint64_t)&_trap_user_entry);
         RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
         RiscV::mc_sstatus(RiscV::SSTATUS_SPP);
+        uint64_t sstatus = RiscV::r_sstatus();
+        if (!(sstatus & RiscV::SSTATUS_SPIE)) {
+            Console::panic("PCB::pcbEntry(): SPIE must be set before user return");
+        }
+        if (sstatus & RiscV::SSTATUS_SPP) {
+            Console::panic("PCB::pcbEntry(): SPP must be clear for user return");
+        }
         if (current->m_entry != current->m_trapFrame->sepc) {
             current->m_trapFrame->sp = USER_STACK_TOP;
             current->m_trapFrame->sepc = current->m_entry;
@@ -67,6 +74,9 @@ void PCB::pcbEntry() {
         );
     } else {
         RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
+        if (!(RiscV::r_sstatus() & RiscV::SSTATUS_SIE)) {
+            Console::panic("PCB::pcbEntry(): interrupts must be enabled in kernel threads");
+        }
         ((void(*)(void*))current->m_entry)(current->m_args);
         current->exit();
     }

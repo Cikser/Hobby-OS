@@ -41,7 +41,7 @@ int main() {
 	auto t2 = new Thread(printPid);
 
 	while (initProc->state() != ProcState::ZOMBIE || t1->state() != ProcState::ZOMBIE
-		|| t2->state() != ProcState::ZOMBIE) PCB::dispatch();
+		|| t2->state() != ProcState::ZOMBIE);
 
 	Console::kprintf("back in main\n");
 

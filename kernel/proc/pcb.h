@@ -34,6 +34,7 @@ struct Context {
     uint64_t s9;
     uint64_t s10;
     uint64_t s11;
+    uint64_t sstatus;
 };
 
 class PCB {

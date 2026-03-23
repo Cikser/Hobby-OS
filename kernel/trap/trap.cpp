@@ -16,6 +16,11 @@ void TrapHandler::init() {
 }
 
 void TrapHandler::handleTrap(TrapFrame* trapFrame) {
+    // Keep trap handling non-preemptible; execution mode policy is restored on exit.
+    RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
+    if (RiscV::r_sstatus() & RiscV::SSTATUS_SIE) {
+        Console::panic("TrapHandler::handleTrap(): interrupts must be disabled");
+    }
     uint64_t stval = RiscV::r_stval();
     uint64_t scause = RiscV::r_scause();
     uint64_t sepc = RiscV::r_sepc();

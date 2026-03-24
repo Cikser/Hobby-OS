@@ -107,7 +107,6 @@ void PCB::dispatch() {
         RiscV::w_sscratch((uint64_t)next->m_kstack + KERNEL_STACK_SIZE);
         next->m_trapFrame->kstack = (uint64_t)next->m_kstack + KERNEL_STACK_SIZE;
     }
-    //RiscV::w_stvec((uint64_t)(next->m_usermode ? &_trap_user_entry : &_trap_kernel_entry));
 
     switchContext(&current->m_context, &next->m_context);
 }
@@ -120,5 +119,11 @@ PCB::~PCB() {
 void PCB::sleep(time_t sleepTime) {
     s_running->setState(ProcState::SLEEPING);
     Scheduler::putSleep(s_running, sleepTime);
+    yield();
+}
+
+void PCB::yield() {
+    uint64_t sstatus = RiscV::r_sstatus();
     dispatch();
+    RiscV::w_sstatus(sstatus);
 }

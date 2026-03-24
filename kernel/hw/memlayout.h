@@ -20,6 +20,7 @@ public:
     static constexpr uint64_t MMIO_BASE = 0xFFFFFFD000000000ULL;
     static constexpr uint64_t UART_BASE = MMIO_BASE + 0x10000000ULL;
     static constexpr uint64_t VIRTIO_BASE = MMIO_BASE + 0x10001000ULL;
+    static constexpr uint64_t PLIC_BASE = MMIO_BASE + 0xC000000ULL;
 
     static constexpr uint64_t CLINT_BASE = MMIO_BASE + 0x2000000ULL;
     static constexpr uint64_t CLINT_MTIME = MMIO_BASE + 0x200BFF8ULL;

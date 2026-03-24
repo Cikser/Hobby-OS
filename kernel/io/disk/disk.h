@@ -1,8 +1,10 @@
 #ifndef RISC_V_DISK_H
 #define RISC_V_DISK_H
+
 #include "virtio.h"
 #include "../../types.h"
-
+#include "../../proc/sync/sem.h"
+#include "../../proc/sync/lock.h"
 
 class Disk {
 
@@ -11,6 +13,9 @@ public:
 
     static void read(uint64_t sector, void* buf);
     static void write(uint64_t sector, void* buf);
+
+    static void interruptHandler();
+    static void enableInterruptMode();
 
     static constexpr uint32_t SECTOR_SIZE = 512;
 
@@ -30,10 +35,12 @@ private:
     static VirtioBlkReqHeader m_req[QUEUE_SIZE / 3];
     static volatile uint8_t m_status[QUEUE_SIZE / 3];
     static uint8_t m_free[QUEUE_SIZE / 3];
+    static Semaphore* m_slotSem[QUEUE_SIZE / 3];
+    static Lock m_lock;
+    static bool m_interruptMode;
 
     static int  allocSlot();
     static void freeSlot(int slot);
-
 };
 
 inline void Disk::writeReg(uint32_t offset, uint32_t value) {

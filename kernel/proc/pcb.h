@@ -34,7 +34,6 @@ struct Context {
     uint64_t s9;
     uint64_t s10;
     uint64_t s11;
-    uint64_t sstatus;
 };
 
 class PCB {
@@ -45,6 +44,7 @@ public:
 
     virtual ~PCB();
 
+    static void yield();
     static void dispatch();
     static void sleep(time_t sleepTime);
 

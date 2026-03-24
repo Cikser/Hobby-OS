@@ -1,5 +1,6 @@
 #include "sem.h"
 #include "../scheduler.h"
+#include "../../io/console/console.h"
 
 KMemCache<Semaphore>* Semaphore::s_cache = nullptr;
 Lock Semaphore::s_lock = Lock();
@@ -31,7 +32,7 @@ void Semaphore::block() {
     running->setState(ProcState::BLOCKED);
     m_blocked->put(running);
     m_lock.release();
-    PCB::dispatch();
+    PCB::yield();
 }
 
 void Semaphore::unblock() const {
@@ -54,7 +55,7 @@ void Semaphore::signalWaitAtomic(Semaphore* toSignal, Semaphore* toWait) {
         toWait->m_blocked->put(running);
         toWait->m_lock.release();
         s_lock.release();
-        PCB::dispatch();
+        PCB::yield();
     } else {
         toWait->m_value--;
         toWait->m_lock.release();
@@ -76,7 +77,7 @@ void Semaphore::waitUnlocked() {
         PCB* running = PCB::running();
         running->setState(ProcState::BLOCKED);
         m_blocked->put(running);
-        PCB::dispatch();
+        PCB::yield();
     }
     else {
         m_value--;

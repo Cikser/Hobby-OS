@@ -17,8 +17,6 @@ _ZN3PCB13switchContextEP7ContextS1_:
     sd s9,   88(a0)
     sd s10,  96(a0)
     sd s11,  104(a0)
-    csrr t0, sstatus
-    sd t0,   112(a0)
 
     ld ra,   0(a1)
     ld sp,   8(a1)
@@ -34,7 +32,5 @@ _ZN3PCB13switchContextEP7ContextS1_:
     ld s9,   88(a1)
     ld s10,  96(a1)
     ld s11,  104(a1)
-    ld t0,   112(a1)
-    csrw sstatus, t0
 
     ret

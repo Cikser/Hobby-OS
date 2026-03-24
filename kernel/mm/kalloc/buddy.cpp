@@ -85,11 +85,18 @@ void* Buddy::alloc(size_t size) {
     return alloc;
 }
 
+int getOrder(size_t size) {
+    int order = 0;
+    size_t n = (size + MemoryLayout::PAGE_SIZE - 1) / MemoryLayout::PAGE_SIZE;
+    while (n > (1 << order)) order++;
+    return order;
+}
+
 void Buddy::free(void* ptr, size_t size) {
     m_lock.acquire();
 
     int block = ptrToBlock(ptr);
-    int entry = (size - 1) / MemoryLayout::PAGE_SIZE;
+    int entry = getOrder(size);
     putBlock(entry, block);
     merge(entry);
 

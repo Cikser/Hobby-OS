@@ -217,7 +217,7 @@ void Process::exit(int exitCode) {
     }
 
     m_state = ProcState::ZOMBIE;
-    dispatch();
+    yield();
 }
 
 pid_t Process::wait(pid_t pid, int* status) {

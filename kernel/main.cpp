@@ -34,6 +34,7 @@ int main() {
 	VFS::init();
 	auto main = new Thread(nullptr);
 	Process* initProc = Process::createInit();
+	Disk::enableInterruptMode();
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
 

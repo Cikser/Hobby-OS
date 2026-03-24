@@ -8,9 +8,12 @@ uint16_t Disk::m_usedIdx = 0;
 volatile uint8_t Disk::m_status[QUEUE_SIZE / 3];
 VirtioBlkReqHeader Disk::m_req[QUEUE_SIZE / 3];
 uint8_t Disk::m_free[QUEUE_SIZE / 3];
+Semaphore* Disk::m_slotSem[QUEUE_SIZE / 3];
 VirtqAvail* Disk::m_avail = nullptr;
 VirtqUsed* Disk::m_used = nullptr;
 VirtqDesc* Disk::m_desc = nullptr;
+Lock Disk::m_lock;
+bool Disk::m_interruptMode = false;
 
 void Disk::init() {
     if (readReg(VIRTIO_MAGIC) != VIRTIO_MAGIC_VALUE) {
@@ -61,18 +64,31 @@ void Disk::init() {
     Console::kprintf("Disk initialized\n");
 }
 
+void Disk::enableInterruptMode() {
+    m_usedIdx = m_used->idx;
+    for (auto & i : m_slotSem) {
+        i = new Semaphore(0);
+    }
+    m_interruptMode = true;
+}
+
 int Disk::allocSlot() {
+    m_lock.acquire();
     for (int i = 0; i < QUEUE_SIZE / 3; i++) {
         if (!m_free[i]) {
             m_free[i] = 1;
+            m_lock.release();
             return i;
         }
     }
+    m_lock.release();
     return -1;
 }
 
 void Disk::freeSlot(int slot) {
+    m_lock.acquire();
     m_free[slot] = 0;
+    m_lock.release();
 }
 
 void Disk::sendRequest(uint64_t sector, void* buf, opType op) {
@@ -103,13 +119,36 @@ void Disk::sendRequest(uint64_t sector, void* buf, opType op) {
 
     writeReg(VIRTIO_QUEUE_NOTIFY, 0);
 
-    while (m_status[slot] == 0xFF) {}
-    __sync_synchronize();
+    if (m_interruptMode) {
+        m_slotSem[slot]->wait();
+    } else {
+        while (m_status[slot] == 0xFF) {}
+        __sync_synchronize();
+    }
 
     if (m_status[slot] != 0)
         Console::panic("Disk::sendRequest(): request failed");
 
     freeSlot(slot);
+}
+
+void Disk::interruptHandler() {
+    uint32_t status = readReg(VIRTIO_INTERRUPT_STATUS);
+    writeReg(VIRTIO_INTERRUPT_ACK, status);
+    __sync_synchronize();
+
+    while (m_usedIdx != m_used->idx) {
+        __sync_synchronize();
+
+        uint32_t id   = m_used->ring[m_usedIdx % QUEUE_SIZE].id;
+        uint32_t slot = id / 3;
+        m_usedIdx++;
+
+        while (m_status[slot] == 0xFF) {}
+        __sync_synchronize();
+
+        m_slotSem[slot]->signal();
+    }
 }
 
 void Disk::read(uint64_t sector, void *buf) {

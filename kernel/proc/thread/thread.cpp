@@ -55,5 +55,5 @@ void Thread::exit(int exitCode) {
         m_waitSem.signal();
     }
     m_state = ProcState::ZOMBIE;
-    dispatch();
+    yield();
 }

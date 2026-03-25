@@ -69,7 +69,7 @@ class Vector {
 public:
     explicit Vector(int capacity = DEFAULT_CAPACITY) :
         m_data(nullptr), m_capacity(capacity), m_size(0) {
-        m_data = (POINTER_TYPE)MemoryAllocator::kmalloc(DEFAULT_CAPACITY * sizeof(VALUE_TYPE));
+        m_data = (POINTER_TYPE)MemoryAllocator::kmalloc(capacity * sizeof(VALUE_TYPE));
     }
 
     ~Vector() {
@@ -83,6 +83,13 @@ public:
         return m_data[index];
     }
 
+    CONST_REFERENCE_TYPE at(ITERATOR_TYPE it) const {
+        if (it < m_data || it >= m_data + m_size) {
+            Console::panic("Vector::at(): index out of bounds");
+        }
+        return *it;
+    }
+
     REFERENCE_TYPE operator[](uint64_t index) {
         if (index >= m_size) {
             Console::panic("Vector::at(): index out of bounds");
@@ -92,7 +99,7 @@ public:
 
     void pushBack(CONST_REFERENCE_TYPE value) {
         if (m_size == m_capacity) {
-            auto newData = (POINTER_TYPE)MemoryAllocator::kmalloc(m_capacity * 2);
+            auto newData = (POINTER_TYPE)MemoryAllocator::kmalloc(m_capacity * sizeof(VALUE_TYPE) * 2);
             memcpy(newData, m_data, m_size * sizeof(VALUE_TYPE));
             MemoryAllocator::kfree(m_data);
             m_data = newData;
@@ -116,26 +123,31 @@ public:
     }
 
     void reserve(uint64_t capacity) {
+        POINTER_TYPE oldData = m_data;
+        m_data = (POINTER_TYPE)MemoryAllocator::kmalloc(capacity * sizeof(VALUE_TYPE));
         if (m_data) {
+            memcpy(m_data, oldData, capacity * sizeof(VALUE_TYPE));
             MemoryAllocator::kfree(m_data);
         }
-        m_data = (POINTER_TYPE)MemoryAllocator::kmalloc(capacity * sizeof(VALUE_TYPE));
+        m_capacity = capacity;
     }
 
     void clear() {
         if (!m_data) return;
         MemoryAllocator::kfree(m_data);
         m_data = nullptr;
+        m_size = 0;
+        m_capacity = 0;
     }
 
-    REFERENCE_TYPE front() const {
+    CONST_REFERENCE_TYPE front() {
         if (m_size == 0) {
             Console::panic("Vector::front(): vector is empty");
         }
         return m_data[0];
     }
 
-    REFERENCE_TYPE back() const {
+    CONST_REFERENCE_TYPE back() {
         if (m_size == 0) {
             Console::panic("Vector::back(): vector is empty");
         }

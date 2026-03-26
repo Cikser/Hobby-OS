@@ -160,6 +160,15 @@ public:
         return Iterator(m_data + m_size);
     }
 
+    void set(ITERATOR_TYPE begin, ITERATOR_TYPE end, VALUE_TYPE value) {
+        if (begin >= end) {
+            Console::panic("Vector::set(): iterator is out of bounds");
+        }
+        for (auto it = begin; it != end; ++it) {
+            *it = value;
+        }
+    }
+
 private:
     POINTER_TYPE m_data;
     uint64_t m_capacity;

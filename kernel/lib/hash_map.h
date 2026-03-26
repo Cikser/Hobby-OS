@@ -1,8 +1,52 @@
 #ifndef RISC_V_HASHMAP_H
 #define RISC_V_HASHMAP_H
 #include "vector.h"
+#include "../mm/mem.h"
 
-template<typename K, typename V>
+template<typename K>
+struct HashTrait {
+    static uint64_t hash(const K& key, uint64_t capacity) {
+        uint64_t v = (uint64_t)key;
+        constexpr int shift = (sizeof(K) >= 8) ? 3 :
+                              (sizeof(K) >= 4) ? 2 :
+                              (sizeof(K) >= 2) ? 1 : 0;
+        v >>= shift;
+        v *= 11400714819323198485ULL;
+        return v % capacity;
+    }
+    static bool eq(const K& a, const K& b) { return a == b; }
+};
+
+template<>
+struct HashTrait<uint32_t> {
+    static uint64_t hash(uint32_t key, uint64_t capacity) {
+        return ((uint64_t)key * 2654435761ULL) % capacity;
+    }
+    static bool eq(uint32_t a, uint32_t b) { return a == b; }
+};
+
+template<>
+struct HashTrait<uint64_t> {
+    static uint64_t hash(uint64_t key, uint64_t capacity) {
+        key ^= key >> 30; key *= 0xbf58476d1ce4e5b9ULL;
+        key ^= key >> 27; key *= 0x94d049bb133111ebULL;
+        key ^= key >> 31;
+        return key % capacity;
+    }
+    static bool eq(uint64_t a, uint64_t b) { return a == b; }
+};
+
+template<>
+struct HashTrait<const char*> {
+    static uint64_t hash(const char* key, uint64_t capacity) {
+        uint64_t h = 5381;
+        while (*key) h = ((h << 5) + h) ^ (unsigned char)*key++;
+        return h % capacity;
+    }
+    static bool eq(const char* a, const char* b) { return strcmp(a, b) == 0; }
+};
+
+template<typename K, typename V, typename Trait = HashTrait<K>>
 class HashMap {
     static constexpr uint64_t DEFAULT_CAPACITY = 64;
     static constexpr uint64_t LOAD_FACTOR_NUM  = 3;
@@ -47,20 +91,20 @@ public:
     explicit HashMap(uint64_t capacity = DEFAULT_CAPACITY) :
         m_entries(capacity), m_capacity(capacity), m_count(0)
     {
-        memset(m_entries, 0, sizeof(HashMapEntry*) * m_capacity);
+        m_entries.set(m_entries.begin(), m_entries.end(), 0);
     }
 
     ~HashMap() {
-        for (auto& e : m_entries) {
-            delete e;
+        for (uint64_t i = 0; i < m_capacity; i++) {
+            delete m_entries[i];
         }
     }
 
     V_CONST_REFERENCE_TYPE at(K_CONST_REFERENCE_TYPE key) const {
         uint64_t index = hash(key);
-        HashMapEntry* entry = m_entries[index];
+        HashMapEntry* entry = m_entries.at(index);
         while (entry != nullptr) {
-            if (entry->key == key)
+            if (Trait::eq(entry->key, key))
                 return entry->value;
             entry = entry->next;
         }
@@ -71,7 +115,7 @@ public:
         uint64_t index = hash(key);
         HashMapEntry* entry = m_entries[index];
         while (entry != nullptr) {
-            if (entry->key == key)
+            if (Trait::eq(entry->key, key))
                 return entry->value;
             entry = entry->next;
         }
@@ -85,7 +129,7 @@ public:
         uint64_t index = hash(key);
         HashMapEntry* it = m_entries[index];
         while (it != nullptr) {
-            if (it->key == key)
+            if (Trait::eq(it->key, key))
                 Console::panic("HashMap::insert(): key already inside");
             it = it->next;
         }
@@ -102,7 +146,7 @@ public:
         HashMapEntry* entry = m_entries[index];
         HashMapEntry* prev = nullptr;
         while (entry != nullptr) {
-            if (entry->key == key)
+            if (Trait::eq(entry->key, key))
                 break;
             prev = entry;
             entry = entry->next;
@@ -140,7 +184,7 @@ public:
         uint64_t index = hash(key);
         HashMapEntry* entry = m_entries[index];
         while (entry != nullptr) {
-            if (entry->key == key)
+            if (Trait::eq(entry->key, key))
                 return true;
             entry = entry->next;
         }
@@ -153,13 +197,7 @@ private:
     }
 
     static uint64_t hashKey(K_CONST_REFERENCE_TYPE key, uint64_t capacity) {
-        uint64_t v = (uint64_t)key;
-        constexpr int shift = (sizeof(K) >= 8) ? 3 :
-                              (sizeof(K) >= 4) ? 2 :
-                              (sizeof(K) >= 2) ? 1 : 0;
-        v >>= shift;
-        v *= 11400714819323198485ULL;
-        return v % capacity;
+        return Trait::hash(key, capacity);
     }
 
     void rehash() {

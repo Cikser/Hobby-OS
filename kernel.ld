@@ -64,7 +64,7 @@ SECTIONS
     PROVIDE(_data_end = .);
   } >kvirt :data
 
-.bss : AT(LOADADDR(.data) + SIZEOF(.data)) {
+.bss : AT(ALIGN(LOADADDR(.data) + SIZEOF(.data), 4096)) {
     . = ALIGN(4096);
     PROVIDE(_bss_start = .);
     *(.sbss .sbss.*) *(.bss .bss.*)

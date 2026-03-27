@@ -17,6 +17,9 @@ private:
     static VfsInode* resolvePath(const char* path);
     static VfsInode* resolveParent(const char* path, const char** outName);
 
+    static VfsInode* getInode(uint32_t inodeNum);
+    static void putInode(VfsInode* inode, uint32_t inodeNum);
+
     static VfsMount* m_mount;
 };
 

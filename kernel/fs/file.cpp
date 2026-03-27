@@ -1,12 +1,16 @@
 #include "file.h"
+#include "inode_cache.h"
 
 KMemCache<File>* File::s_cache = new KMemCache<File>();
 
-File::File(const File& other, bool copyOffset) {
-    m_inode = other.m_inode;
-    m_flags = other.m_flags;
-    m_offset = copyOffset ? other.m_offset : 0;
-    m_mount = other.m_mount;
+File::File(const File& other, bool copyOffset)
+    : m_inode(other.m_inode),
+      m_mount(other.m_mount),
+      m_flags(other.m_flags),
+      m_offset(copyOffset ? other.m_offset : 0)
+{
+    if (m_inode && m_inode->inodeNum() != 0)
+        InodeCache::acquire(m_mount, m_inode->inodeNum());
 }
 
 int File::read(void* buf, uint64_t len) {
@@ -42,8 +46,14 @@ uint64_t File::tell() const {
 
 void File::close() {
     if (!m_inode) return;
-    if (m_mount)
+
+    uint32_t num = m_inode->inodeNum();
+    if (num != 0) {
+        InodeCache::release(m_mount, num);
+    }
+    else if (m_mount) {
         m_mount->putInode(m_inode);
+    }
     m_inode = nullptr;
     m_mount = nullptr;
 }

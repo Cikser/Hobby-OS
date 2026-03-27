@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "inode_cache.h"
 
 #include "console.h"
 #include "../mm/mem.h"
@@ -15,6 +16,20 @@ void VFS::mount(VfsMount* mount) {
     m_mount = mount;
 }
 
+VfsInode* VFS::getInode(uint32_t inodeNum) {
+    VfsInode* cached = InodeCache::lookup(m_mount, inodeNum);
+    if (cached) return cached;
+
+    VfsInode* fresh = m_mount->getInode(inodeNum);
+    if (!fresh) return nullptr;
+
+    return InodeCache::insert(m_mount, inodeNum, fresh);
+}
+
+void VFS::putInode(VfsInode* inode, uint32_t inodeNum) {
+    InodeCache::release(m_mount, inodeNum);
+}
+
 File* VFS::open(const char* path, uint32_t flags) {
     if (!m_mount) return nullptr;
 
@@ -27,9 +42,13 @@ File* VFS::open(const char* path, uint32_t flags) {
         VfsInode* parent = resolveParent(path, &name);
         if (!parent) return nullptr;
 
-        inode = m_mount->create(parent, name);
-        m_mount->putInode(parent);
-        if (!inode) return nullptr;
+        VfsInode* created = m_mount->create(parent, name);
+        putInode(parent, parent->inodeNum());
+
+        if (!created) return nullptr;
+
+        VfsInode* cached = InodeCache::insert(m_mount, created->inodeNum(), created);
+        return new File(cached, m_mount, flags);
     }
 
     return new File(inode, m_mount, flags);
@@ -42,17 +61,16 @@ int VFS::mkdir(const char* path) {
     VfsInode* parent = resolveParent(path, &name);
     if (!parent) return -1;
     if (!parent->isDir()) {
-        m_mount->putInode(parent);
+        putInode(parent, parent->inodeNum());
         return -1;
     }
-
     if (!name || *name == '\0') {
-        m_mount->putInode(parent);
+        putInode(parent, parent->inodeNum());
         return -1;
     }
 
     int ret = m_mount->mkdir(parent, name);
-    m_mount->putInode(parent);
+    putInode(parent, parent->inodeNum());
     return ret;
 }
 
@@ -63,22 +81,22 @@ int VFS::create(const char* path) {
     VfsInode* parent = resolveParent(path, &name);
     if (!parent) return -1;
     if (!parent->isDir()) {
-        m_mount->putInode(parent);
+        putInode(parent, parent->inodeNum());
         return -1;
     }
     if (!name || *name == '\0') {
-        m_mount->putInode(parent);
+        putInode(parent, parent->inodeNum());
         return -1;
     }
 
     VfsInode* created = m_mount->create(parent, name);
-    if (!created) {
-        m_mount->putInode(parent);
-        return -1;
-    }
+    putInode(parent, parent->inodeNum());
 
-    m_mount->putInode(parent);
-    m_mount->putInode(created);
+    if (!created) return -1;
+
+    uint32_t num = created->inodeNum();
+    InodeCache::insert(m_mount, num, created);
+    InodeCache::release(m_mount, num);
     return 0;
 }
 
@@ -89,16 +107,27 @@ int VFS::unlink(const char* path) {
     VfsInode* parent = resolveParent(path, &name);
     if (!parent) return -1;
     if (!parent->isDir()) {
-        m_mount->putInode(parent);
+        putInode(parent, parent->inodeNum());
         return -1;
     }
     if (!name || *name == '\0') {
-        m_mount->putInode(parent);
+        putInode(parent, parent->inodeNum());
         return -1;
     }
 
+    VfsInode* target = resolvePath(path);
+    uint32_t targetNum = 0;
+    if (target) {
+        targetNum = target->inodeNum();
+        putInode(target, targetNum);
+    }
+
     int ret = m_mount->unlink(parent, name);
-    m_mount->putInode(parent);
+    putInode(parent, parent->inodeNum());
+
+    if (ret == 0 && targetNum != 0)
+        InodeCache::invalidate(m_mount, targetNum);
+
     return ret;
 }
 
@@ -106,21 +135,20 @@ VfsInode* VFS::resolvePath(const char* path) {
     if (!m_mount) return nullptr;
     if (path[0] != '/') return nullptr;
 
-    VfsInode* current = m_mount->getRoot();
+    VfsInode* current = getInode(2);
     path++;
 
     while (*path != '\0') {
         char component[256];
         int len = 0;
-        while (*path != '\0' && *path != '/' && len < 255) {
+        while (*path != '\0' && *path != '/' && len < 255)
             component[len++] = *path++;
-        }
         component[len] = '\0';
         if (*path == '/') path++;
         if (len == 0) continue;
 
         if (!current->isDir()) {
-            m_mount->putInode(current);
+            putInode(current, current->inodeNum());
             return nullptr;
         }
 
@@ -128,15 +156,15 @@ VfsInode* VFS::resolvePath(const char* path) {
         bool found = false;
         for (uint32_t i = 0; current->readdir(i, &entry) == 0; i++) {
             if (strcmp(entry.name, component) == 0) {
-                m_mount->putInode(current);
-                current = m_mount->getInode(entry.inodeNum);
+                putInode(current, current->inodeNum());
+                current = getInode(entry.inodeNum);
                 found = true;
                 break;
             }
         }
 
         if (!found) {
-            m_mount->putInode(current);
+            putInode(current, current->inodeNum());
             return nullptr;
         }
     }
@@ -154,9 +182,8 @@ VfsInode* VFS::resolveParent(const char* path, const char** outName) {
 
     *outName = lastSlash + 1;
 
-    if (lastSlash == path) {
-        return m_mount->getRoot();
-    }
+    if (lastSlash == path)
+        return getInode(2);
 
     char parentPath[256];
     int len = lastSlash - path;

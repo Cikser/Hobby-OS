@@ -13,6 +13,7 @@ public:
     bool isDir() override { return false; }
     uint64_t size() override { return 0; }
     int stat(InodeStat* out) override { return -1; }
+    uint32_t inodeNum() const override { return 0; }
     static VfsInode* instance() {
         if (!s_inode) {
             s_inode = new UartInode();

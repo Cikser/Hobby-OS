@@ -91,7 +91,8 @@ public:
     explicit HashMap(uint64_t capacity = DEFAULT_CAPACITY) :
         m_entries(capacity), m_capacity(capacity), m_count(0)
     {
-        m_entries.set(m_entries.begin(), m_entries.end(), 0);
+        m_entries.resize(capacity);
+        m_entries.fill(0);
     }
 
     ~HashMap() {
@@ -182,7 +183,7 @@ public:
 
     bool contains(K_CONST_REFERENCE_TYPE key) const {
         uint64_t index = hash(key);
-        HashMapEntry* entry = m_entries[index];
+        HashMapEntry* entry = m_entries.at(index);
         while (entry != nullptr) {
             if (Trait::eq(entry->key, key))
                 return true;
@@ -203,7 +204,7 @@ private:
     void rehash() {
         uint64_t newCapacity = m_capacity * 2;
         Vector<HashMapEntry*> newEntries(newCapacity);
-        newEntries.resize(newCapacity);
+        newEntries.fill(0);
 
         for (uint64_t i = 0; i < m_capacity; i++) {
             HashMapEntry* entry = m_entries[i];

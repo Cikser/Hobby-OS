@@ -59,6 +59,14 @@ class Vector {
             return a.m_it != b.m_it;
         }
 
+        friend bool operator<(const Iterator& a, const Iterator& b) {
+            return a.m_it < b.m_it;
+        }
+
+        friend bool operator>(const Iterator& a, const Iterator& b) {
+            return a.m_it > b.m_it;
+        }
+
     private:
         POINTER_TYPE m_it;
     };
@@ -161,11 +169,18 @@ public:
     }
 
     void set(ITERATOR_TYPE begin, ITERATOR_TYPE end, VALUE_TYPE value) {
-        if (begin >= end) {
+        if (begin == end) return;
+        if (!(begin < end)) {
             Console::panic("Vector::set(): iterator is out of bounds");
         }
         for (auto it = begin; it != end; ++it) {
             *it = value;
+        }
+    }
+
+    void fill(VALUE_TYPE value) {
+        for (uint64_t i = 0; i < m_capacity; i++) {
+            m_data[i] = value;
         }
     }
 

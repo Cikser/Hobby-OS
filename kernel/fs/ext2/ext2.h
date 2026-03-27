@@ -28,7 +28,7 @@ public:
     bool isDir() override;
     uint64_t size() override;
     int stat(InodeStat* out) override;
-    uint32_t inodeNum() const { return m_num; }
+    uint32_t inodeNum() const override { return m_num; }
 
 private:
     friend class Ext2Mount;

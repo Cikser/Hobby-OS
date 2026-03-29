@@ -28,8 +28,11 @@ void _start() {
 
     long child_pid = syscall(SYS_FORK, 0, 0, 0, 0);
     if (child_pid == 0) {
+        for (int i = 0; i < 10; i++) {
+            long new_pid = syscall(SYS_FORK, 0, 0, 0, 0);
+        }
         syscall(SYS_WRITE, 1, (long)"I am child\n", 11, 0);
-        char* path = "/readme.txt";
+        const char* path = "/readme.txt";
         int fd = syscall(SYS_OPENAT, 0, (long)path, 1, 0);
         char buf[256];
         syscall(SYS_READ, fd, (long)buf, 256, 0);

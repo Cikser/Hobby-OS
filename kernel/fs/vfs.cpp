@@ -1,5 +1,6 @@
 #include "vfs.h"
 #include "inode_cache.h"
+#include "path_cache.h"
 
 #include "console.h"
 #include "../mm/mem.h"
@@ -47,7 +48,11 @@ File* VFS::open(const char* path, uint32_t flags) {
 
         if (!created) return nullptr;
 
-        VfsInode* cached = InodeCache::insert(m_mount, created->inodeNum(), created);
+        uint32_t num = created->inodeNum();
+        VfsInode* cached = InodeCache::insert(m_mount, num, created);
+
+        PathCache::insert(path, num);
+
         return new File(cached, m_mount, flags);
     }
 
@@ -71,6 +76,7 @@ int VFS::mkdir(const char* path) {
 
     int ret = m_mount->mkdir(parent, name);
     putInode(parent, parent->inodeNum());
+    PathCache::invalidate(path);
     return ret;
 }
 
@@ -91,10 +97,10 @@ int VFS::create(const char* path) {
 
     VfsInode* created = m_mount->create(parent, name);
     putInode(parent, parent->inodeNum());
-
     if (!created) return -1;
 
     uint32_t num = created->inodeNum();
+    PathCache::insert(path, num);
     InodeCache::insert(m_mount, num, created);
     InodeCache::release(m_mount, num);
     return 0;
@@ -125,8 +131,10 @@ int VFS::unlink(const char* path) {
     int ret = m_mount->unlink(parent, name);
     putInode(parent, parent->inodeNum());
 
-    if (ret == 0 && targetNum != 0)
+    if (ret == 0 && targetNum != 0) {
+        PathCache::invalidate(path);
         InodeCache::invalidate(m_mount, targetNum);
+    }
 
     return ret;
 }
@@ -135,16 +143,23 @@ VfsInode* VFS::resolvePath(const char* path) {
     if (!m_mount) return nullptr;
     if (path[0] != '/') return nullptr;
 
-    VfsInode* current = getInode(2);
-    path++;
+    uint32_t cachedNum = PathCache::lookup(path);
+    if (cachedNum != 0) {
+        VfsInode* inode = getInode(cachedNum);
+        if (inode) return inode;
+        PathCache::invalidate(path);
+    }
 
-    while (*path != '\0') {
+    VfsInode* current = getInode(2);
+    const char* p = path + 1;
+
+    while (*p != '\0') {
         char component[256];
         int len = 0;
-        while (*path != '\0' && *path != '/' && len < 255)
-            component[len++] = *path++;
+        while (*p != '\0' && *p != '/' && len < 255)
+            component[len++] = *p++;
         component[len] = '\0';
-        if (*path == '/') path++;
+        if (*p == '/') p++;
         if (len == 0) continue;
 
         if (!current->isDir()) {
@@ -168,6 +183,7 @@ VfsInode* VFS::resolvePath(const char* path) {
             return nullptr;
         }
     }
+    PathCache::insert(path, current->inodeNum());
 
     return current;
 }
@@ -177,8 +193,8 @@ VfsInode* VFS::resolveParent(const char* path, const char** outName) {
     if (path[0] != '/') return nullptr;
 
     const char* lastSlash = path;
-    for (const char* p = path; *p != '\0'; p++)
-        if (*p == '/') lastSlash = p;
+    for (const char* q = path; *q != '\0'; q++)
+        if (*q == '/') lastSlash = q;
 
     *outName = lastSlash + 1;
 
@@ -186,7 +202,7 @@ VfsInode* VFS::resolveParent(const char* path, const char** outName) {
         return getInode(2);
 
     char parentPath[256];
-    int len = lastSlash - path;
+    uint32_t len = lastSlash - path;
     memcpy(parentPath, path, len);
     parentPath[len] = '\0';
 

@@ -14,6 +14,7 @@ VirtqUsed* Disk::m_used = nullptr;
 VirtqDesc* Disk::m_desc = nullptr;
 Lock Disk::m_lock;
 bool Disk::m_interruptMode = false;
+Semaphore* Disk::m_allocSem = nullptr;
 
 void Disk::init() {
     if (readReg(VIRTIO_MAGIC) != VIRTIO_MAGIC_VALUE) {
@@ -61,6 +62,8 @@ void Disk::init() {
 
     writeReg(VIRTIO_STATUS, status | VIRTIO_STATUS_DRIVER_OK);
 
+    m_allocSem = new Semaphore(QUEUE_SIZE / 3);
+
     Console::kprintf("Disk initialized\n");
 }
 
@@ -73,6 +76,7 @@ void Disk::enableInterruptMode() {
 }
 
 int Disk::allocSlot() {
+    m_allocSem->wait();
     m_lock.acquire();
     for (int i = 0; i < QUEUE_SIZE / 3; i++) {
         if (!m_free[i]) {
@@ -89,6 +93,7 @@ void Disk::freeSlot(int slot) {
     m_lock.acquire();
     m_free[slot] = 0;
     m_lock.release();
+    m_allocSem->signal();
 }
 
 void Disk::sendRequest(uint64_t sector, void* buf, opType op) {

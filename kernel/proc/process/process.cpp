@@ -268,6 +268,7 @@ pid_t Process::wait(pid_t pid, int* status) {
     pid_t retPid = zombie->m_pid;
     if (status) *status = zombie->m_exitCode;
 
-    delete zombie;
+    // todo garbage collection
+    //delete zombie;
     return retPid;
 }

@@ -38,6 +38,7 @@ private:
     static Semaphore* m_slotSem[QUEUE_SIZE / 3];
     static Lock m_lock;
     static bool m_interruptMode;
+    static Semaphore* m_allocSem;
 
     static int  allocSlot();
     static void freeSlot(int slot);

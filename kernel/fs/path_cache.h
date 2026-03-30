@@ -27,9 +27,7 @@ public:
     static void invalidatePrefix(const char* prefix);
 
 private:
-    static uint32_t hashPath(const char* path);
-
-    static HashMap<uint32_t, PathEntry*>* s_map;
+    static HashMap<const char*, PathEntry*>* s_map;
     static Lock s_lock;
 };
 

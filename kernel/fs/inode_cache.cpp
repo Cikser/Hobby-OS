@@ -156,7 +156,14 @@ void InodeCache::flush() {
         return;
     }
 
-    // todo hash map iteration
+    for (auto [key, ci] : *s_map) {
+        if (ci) {
+            VfsMount* m = ci->mount;
+            VfsInode* in = ci->inode;
+            m->putInode(in);
+            delete ci;
+        }
+    }
 
     delete s_map;
     s_map = nullptr;

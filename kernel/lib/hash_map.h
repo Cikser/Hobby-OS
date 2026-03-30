@@ -6,7 +6,7 @@
 template<typename K>
 struct HashTrait {
     static uint64_t hash(const K& key, uint64_t capacity) {
-        uint64_t v = (uint64_t)key;
+        auto v = (uint64_t)key;
         constexpr int shift = (sizeof(K) >= 8) ? 3 :
                               (sizeof(K) >= 4) ? 2 :
                               (sizeof(K) >= 2) ? 1 : 0;
@@ -69,10 +69,6 @@ class HashMap {
         V_VALUE_TYPE value;
         HashMapEntry* next;
 
-        ~HashMapEntry() {
-            delete next;
-        }
-
         void* operator new(size_t size) {
             if (!s_entryCache) {
                 s_entryCache = new KMemCache<HashMapEntry>();
@@ -87,6 +83,61 @@ class HashMap {
 
     inline static KMemCache<HashMapEntry>* s_entryCache = nullptr;
 
+    struct Pair {
+        K_REFERENCE_TYPE key;
+        V_REFERENCE_TYPE value;
+    };
+
+    class Iterator {
+    public:
+        Iterator(const HashMap* map, uint64_t index, HashMapEntry* entry)
+            : m_map(map), m_index(index), m_entry(entry) {}
+
+        Pair operator*() const {
+            return Pair{.key = m_entry->key, .value = m_entry->value};
+        }
+
+        Iterator& operator++() {
+            if (!m_entry) return *this;
+
+            m_entry = m_entry->next;
+
+            if (!m_entry) {
+                m_index++;
+                while (m_index < m_map->m_capacity) {
+                    if (m_map->m_entries.at(m_index)) {
+                        m_entry = m_map->m_entries.at(m_index);
+                        break;
+                    }
+                    m_index++;
+                }
+            }
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator tmp = *this;
+            ++(*this);
+            return tmp;
+        }
+
+        bool operator==(const Iterator& other) const {
+            return m_entry == other.m_entry && m_index == other.m_index;
+        }
+
+        bool operator!=(const Iterator& other) const {
+            return !(*this == other);
+        }
+
+    private:
+        const HashMap* m_map;
+        uint64_t m_index;
+        HashMapEntry* m_entry;
+    };
+
+    using ITERATOR_TYPE = Iterator;
+    using CONST_ITERATOR_TYPE = const Iterator;
+
 public:
     explicit HashMap(uint64_t capacity = DEFAULT_CAPACITY) :
         m_entries(capacity), m_capacity(capacity), m_count(0)
@@ -97,7 +148,12 @@ public:
 
     ~HashMap() {
         for (uint64_t i = 0; i < m_capacity; i++) {
-            delete m_entries[i];
+            HashMapEntry* entry = m_entries[i];
+            while (entry) {
+                HashMapEntry* next = entry->next;
+                delete entry;
+                entry = next;
+            }
         }
     }
 
@@ -135,7 +191,7 @@ public:
             it = it->next;
         }
 
-        HashMapEntry* entry = new HashMapEntry{.key = key, .value = value, .next = nullptr};
+        auto* entry = new HashMapEntry{.key = key, .value = value, .next = nullptr};
         entry->next = m_entries[index];
         m_entries[index] = entry;
         m_count++;
@@ -190,6 +246,19 @@ public:
             entry = entry->next;
         }
         return false;
+    }
+
+    ITERATOR_TYPE begin() {
+        for (uint64_t i = 0; i < m_capacity; i++) {
+            if (m_entries[i]) {
+                return Iterator(this, i, m_entries[i]);
+            }
+        }
+        return end();
+    }
+
+    ITERATOR_TYPE end() {
+        return Iterator(this, m_capacity, nullptr);
     }
 
 private:

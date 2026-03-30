@@ -63,7 +63,12 @@ void BlockCache::flush() {
         return;
     }
 
-    // todo hash map iteration
+    for (auto [sectorNum, cb] : *s_map) {
+        if (cb) {
+            delete cb;
+        }
+    }
+
     delete s_map;
     s_map = nullptr;
 

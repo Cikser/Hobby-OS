@@ -24,11 +24,12 @@ public:
     uint64_t tell() const;
     void close();
 
-    static constexpr uint32_t O_RDONLY = 0x1;
-    static constexpr uint32_t O_WRONLY = 0x2;
-    static constexpr uint32_t O_RDWR = 0x3;
+    static constexpr uint32_t O_RDONLY = 0x0;
+    static constexpr uint32_t O_WRONLY = 0x1;
+    static constexpr uint32_t O_RDWR = 0x2;
     static constexpr uint32_t O_CREAT = 0x40;
     static constexpr uint32_t O_TRUNC = 0x200;
+    static constexpr uint32_t O_APPEND = 0x400;
 
 private:
     static KMemCache<File>* s_cache;

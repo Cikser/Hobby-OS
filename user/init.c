@@ -33,7 +33,7 @@ void _start() {
         }
         syscall(SYS_WRITE, 1, (long)"I am child\n", 11, 0);
         const char* path = "/readme.txt";
-        int fd = syscall(SYS_OPENAT, 0, (long)path, 1, 0);
+        int fd = syscall(SYS_OPENAT, 0, (long)path, 0, 0);
         char buf[256];
         syscall(SYS_READ, fd, (long)buf, 256, 0);
         syscall(SYS_CLOSE, fd, 0, 0, 0);

@@ -14,7 +14,11 @@ File::File(const File& other, bool copyOffset)
 }
 
 int File::read(void* buf, uint64_t len) {
-    if (!(m_flags & O_RDONLY)) return -1;
+    uint32_t mode = m_flags & 0x3;
+    if (mode != O_RDONLY && mode != O_RDWR) {
+        return -1;
+    }
+
     if (!m_inode) return -1;
 
     int n = m_inode->read(m_offset, buf, len);
@@ -24,8 +28,16 @@ int File::read(void* buf, uint64_t len) {
 }
 
 int File::write(const void* buf, uint64_t len) {
-    if (!(m_flags & O_WRONLY)) return -1;
+    uint32_t mode = m_flags & 0x3;
+    if (mode != O_WRONLY && mode != O_RDWR) {
+        return -1;
+    }
+
     if (!m_inode) return -1;
+
+    if (m_flags & O_APPEND) {
+        m_offset = m_inode->size();
+    }
 
     int n = m_inode->write(m_offset, buf, len);
     if (n > 0) m_offset += n;

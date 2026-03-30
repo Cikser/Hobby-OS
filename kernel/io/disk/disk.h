@@ -39,6 +39,8 @@ private:
     static Lock m_lock;
     static bool m_interruptMode;
     static Semaphore* m_allocSem;
+    static uint64_t m_slotSector[QUEUE_SIZE / 3];
+    static Semaphore* m_coalesceSem[QUEUE_SIZE / 3];
 
     static int  allocSlot();
     static void freeSlot(int slot);

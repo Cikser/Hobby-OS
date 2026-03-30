@@ -3,12 +3,15 @@
 #include "../../mm/kalloc/kalloc.h"
 #include "../console/console.h"
 #include "../../mm/mem.h"
+#include "block_cache.h"
 
 uint16_t Disk::m_usedIdx = 0;
 volatile uint8_t Disk::m_status[QUEUE_SIZE / 3];
 VirtioBlkReqHeader Disk::m_req[QUEUE_SIZE / 3];
 uint8_t Disk::m_free[QUEUE_SIZE / 3];
 Semaphore* Disk::m_slotSem[QUEUE_SIZE / 3];
+Semaphore* Disk::m_coalesceSem[QUEUE_SIZE / 3];
+uint64_t Disk::m_slotSector[QUEUE_SIZE / 3];
 VirtqAvail* Disk::m_avail = nullptr;
 VirtqUsed* Disk::m_used = nullptr;
 VirtqDesc* Disk::m_desc = nullptr;
@@ -64,6 +67,11 @@ void Disk::init() {
 
     m_allocSem = new Semaphore(QUEUE_SIZE / 3);
 
+    for (int i = 0; i < QUEUE_SIZE / 3; i++) {
+        m_coalesceSem[i] = new Semaphore(0);
+        m_slotSector[i] = -1;
+    }
+
     Console::kprintf("Disk initialized\n");
 }
 
@@ -92,12 +100,26 @@ int Disk::allocSlot() {
 void Disk::freeSlot(int slot) {
     m_lock.acquire();
     m_free[slot] = 0;
+    m_slotSector[slot] = -1;
     m_lock.release();
     m_allocSem->signal();
 }
 
 void Disk::sendRequest(uint64_t sector, void* buf, opType op) {
+    for (int i = 0; i < QUEUE_SIZE / 3; i++) {
+        if (m_free[i] && m_slotSector[i] == sector) {
+            m_coalesceSem[i]->wait();
+            void* cached = BlockCache::lookup(sector);
+            if (cached && op == READ) {
+                memcpy(buf, cached, SECTOR_SIZE);
+                return;
+            }
+        }
+    }
     int slot = allocSlot();
+    m_lock.acquire();
+    m_slotSector[slot] = sector;
+    m_lock.release();
     if (slot < 0)
         Console::panic("Disk::sendRequest(): no free slots");
 
@@ -134,7 +156,11 @@ void Disk::sendRequest(uint64_t sector, void* buf, opType op) {
     if (m_status[slot] != 0)
         Console::panic("Disk::sendRequest(): request failed");
 
+    BlockCache::insert(sector, buf);
     freeSlot(slot);
+
+    while (m_coalesceSem[slot]->waiting())
+        m_coalesceSem[slot]->signal();
 }
 
 void Disk::interruptHandler() {
@@ -156,10 +182,17 @@ void Disk::interruptHandler() {
     }
 }
 
-void Disk::read(uint64_t sector, void *buf) {
+void Disk::read(uint64_t sector, void* buf) {
+    void* cached = BlockCache::lookup(sector);
+    if (cached) {
+        memcpy(buf, cached, SECTOR_SIZE);
+        return;
+    }
+
     sendRequest(sector, buf, READ);
 }
 
-void Disk::write(uint64_t sector, void *buf) {
+void Disk::write(uint64_t sector, void* buf) {
+    BlockCache::invalidate(sector);
     sendRequest(sector, buf, WRITE);
 }

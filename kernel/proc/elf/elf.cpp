@@ -66,6 +66,8 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
         uint8_t segFlags = flags & ~(PMT::PAGE_U | PMT::PAGE_V);
         if (programHeader.p_flags & PF_X) {
             segTable->setText(segFlags, va, vaEnd);
+        } else if ((programHeader.p_flags & PF_R) == programHeader.p_flags) {
+            segTable->setRoData(segFlags, va, vaEnd);
         } else if (programHeader.p_filesz == programHeader.p_memsz) {
             segTable->setData(segFlags, va, vaEnd);
         } else {

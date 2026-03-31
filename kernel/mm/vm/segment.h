@@ -7,11 +7,12 @@
 
 enum class SegType : uint8_t {
     TEXT = 0,
-    DATA = 1,
-    BSS = 2,
-    HEAP = 3,
-    STACK = 4,
-    MMAP = 5,
+    RO_DATA = 1,
+    DATA = 2,
+    BSS = 3,
+    HEAP = 4,
+    STACK = 5,
+    MMAP = 6,
 };
 
 struct SegmentDesc {
@@ -42,12 +43,14 @@ public:
     static SegmentTable* copy(const SegmentTable* src);
 
     SegmentDesc* setText(uint8_t flags, uint64_t va_start, uint64_t va_end);
+    SegmentDesc* setRoData(uint8_t flags, uint64_t va_start, uint64_t va_end);
     SegmentDesc* setData(uint8_t flags, uint64_t va_start, uint64_t va_end);
     SegmentDesc* setBss(uint8_t flags, uint64_t va_start, uint64_t va_end);
     SegmentDesc* setHeap(uint8_t flags, uint64_t va_start, uint64_t va_end);
     SegmentDesc* setStack(uint8_t flags, uint64_t va_start, uint64_t va_end);
 
     SegmentDesc* text() const { return m_text; }
+    SegmentDesc* roData() const { return m_roData; }
     SegmentDesc* data() const { return m_data; }
     SegmentDesc* bss() const { return m_bss; }
     SegmentDesc* heap() const { return m_heap; }
@@ -82,6 +85,7 @@ private:
         uint8_t flags, uint64_t va_start, uint64_t va_end);
 
     SegmentDesc* m_text;
+    SegmentDesc* m_roData;
     SegmentDesc* m_data;
     SegmentDesc* m_bss;
     SegmentDesc* m_heap;

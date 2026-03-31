@@ -4,7 +4,7 @@ KMemCache<SegmentTable>* SegmentTable::s_tableCache = nullptr;
 KMemCache<SegmentDesc>* SegmentTable::s_descCache  = nullptr;
 
 SegmentTable::SegmentTable()
-    : m_text(nullptr), m_data(nullptr), m_bss(nullptr),
+    : m_text(nullptr), m_roData(nullptr), m_data(nullptr), m_bss(nullptr),
       m_heap(nullptr), m_stack(nullptr), m_mmap(nullptr)
 {}
 
@@ -41,6 +41,10 @@ SegmentDesc* SegmentTable::setSingle(SegmentDesc*& slot, SegType type,
 
 SegmentDesc* SegmentTable::setText(uint8_t flags, uint64_t va_start, uint64_t va_end) {
     return setSingle(m_text,  SegType::TEXT,  flags, va_start, va_end);
+}
+
+SegmentDesc* SegmentTable::setRoData(uint8_t flags, uint64_t va_start, uint64_t va_end) {
+    return setSingle(m_roData, SegType::RO_DATA, flags, va_start, va_end);
 }
 
 SegmentDesc* SegmentTable::setData(uint8_t flags, uint64_t va_start, uint64_t va_end) {
@@ -89,10 +93,11 @@ int SegmentTable::removeMmap(uint64_t va_start) {
 }
 
 SegmentDesc* SegmentTable::find(uint64_t va) const {
-    if (m_text  && m_text->contains(va)) return m_text;
-    if (m_data  && m_data->contains(va)) return m_data;
-    if (m_bss   && m_bss->contains(va)) return m_bss;
-    if (m_heap  && m_heap->contains(va)) return m_heap;
+    if (m_text && m_text->contains(va)) return m_text;
+    if (m_roData && m_roData->contains(va)) return m_roData;
+    if (m_data && m_data->contains(va)) return m_data;
+    if (m_bss && m_bss->contains(va)) return m_bss;
+    if (m_heap && m_heap->contains(va)) return m_heap;
     if (m_stack && m_stack->contains(va)) return m_stack;
 
     return findMmap(va);
@@ -100,6 +105,7 @@ SegmentDesc* SegmentTable::find(uint64_t va) const {
 
 void SegmentTable::clear() {
     freeDesc(m_text); m_text = nullptr;
+    freeDesc(m_roData); m_roData = nullptr;
     freeDesc(m_data); m_data = nullptr;
     freeDesc(m_bss); m_bss = nullptr;
     freeDesc(m_heap); m_heap = nullptr;
@@ -123,6 +129,8 @@ SegmentTable* SegmentTable::copy(const SegmentTable* src)
 
     if (src->m_text)
         dst->setText(src->m_text->flags,  src->m_text->start,  src->m_text->end);
+    if (src->m_roData)
+        dst->setRoData(src->m_roData->flags,  src->m_roData->start,  src->m_roData->end);
     if (src->m_data)
         dst->setData(src->m_data->flags,  src->m_data->start,  src->m_data->end);
     if (src->m_bss)

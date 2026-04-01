@@ -19,6 +19,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_WRITE: tf->a0 = sys_write(tf); break;
     case SYS_OPENAT: tf->a0 = sys_openat(tf); break;
     case SYS_CLOSE: tf->a0 = sys_close(tf); break;
+    case SYS_BRK: tf->a0 = sys_brk(tf); break;
     case SYS_MMAP: tf->a0 = sys_mmap(tf); break;
     case SYS_MUNMAP: tf->a0 = sys_munmap(tf); break;
     case SYS_MPROTECT: tf->a0 = sys_mprotect(tf); break;

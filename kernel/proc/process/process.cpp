@@ -1,4 +1,6 @@
 #include "process.h"
+
+#include "riscv.h"
 #include "../thread/thread.h"
 #include "../../io/console/uart_inode.h"
 #include "../../fs/vfs.h"
@@ -124,6 +126,12 @@ File* Process::getFile(int fd) const {
 
 int Process::exec(const char* elfPath) {
     m_spaceLock.acquire();
+    m_ustack = (uint8_t*)MemoryAllocator::kallocPages(USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    if (!m_ustack) {
+        m_spaceLock.release();
+        return -1;
+    }
+    uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
     VM::clearUserPages(m_pmt);
     m_segTable->clear();
     uint64_t entry = ElfLoader::load(elfPath, m_pmt, m_segTable);
@@ -131,13 +139,24 @@ int Process::exec(const char* elfPath) {
         m_spaceLock.release();
         return -1;
     }
-
+    uint64_t oldKstack = m_trapFrame->kstack;
+    memset(m_trapFrame, 0, sizeof(TrapFrame));
+    m_trapFrame->kstack = oldKstack;
+    m_trapFrame->sepc = entry;
+    m_trapFrame->sp = USER_STACK_TOP;
+    m_pmt->mapPages(
+            USER_STACK_TOP - USER_STACK_SIZE,
+            ustackPa,
+            USER_STACK_SIZE / MemoryLayout::PAGE_SIZE,
+            PMT::PAGE_USER
+        );
     m_entry = entry;
     m_trapFrame->sepc = entry;
     m_trapFrame->sp = USER_STACK_TOP;
     m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START,HEAP_START);
     m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
         USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
+    RiscV::flushTLB();
     m_spaceLock.release();
     return 0;
 }
@@ -157,11 +176,17 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
         uint32_t pageNum = (newHeapEnd - heapEnd) / MemoryLayout::PAGE_SIZE;
         for (uint32_t i = 0; i < pageNum; i++) {
             auto page = (uint64_t)MemoryAllocator::kallocPage();
+            if (page == 0) {
+                m_spaceLock.release();
+                return -1;
+            }
             uint64_t pagePa = MemoryLayout::v2p(page);
             if (m_pmt->mapPage(heapEnd, pagePa, PMT::PAGE_USER))
                 heapEnd += MemoryLayout::PAGE_SIZE;
-            else
-                Console::panic("Process::brk(): failed to map page");
+            else {
+                m_spaceLock.release();
+                return -1;
+            }
         }
     }
     else {
@@ -172,8 +197,10 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
                 MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pagePa));
                 heapEnd -= MemoryLayout::PAGE_SIZE;
             }
-            else
-                Console::panic("Process::brk(): failed to unmap page");
+            else {
+                m_spaceLock.release();
+                return -1;
+            }
         }
     }
     m_segTable->heap()->end = heapEnd;

@@ -4,7 +4,8 @@
 #include "../../hw/riscv.h"
 
 PMT::PMT() {
-    memset(m_entries, 0, PAGE_SIZE);
+    if ((uint64_t)this > 0)
+        memset(m_entries, 0, PAGE_SIZE);
 }
 
 uint64_t* PMT::walk(uint64_t va, bool alloc) {
@@ -56,6 +57,7 @@ uint64_t PMT::unmapPage(uint64_t va) {
 
     uint64_t pa = pte2pa(*pte);
     *pte = 0;
+    RiscV::flushTLB();
     return pa;
 }
 
@@ -72,7 +74,7 @@ uint64_t PMT::unmapPages(uint64_t va, uint64_t count) {
 uint64_t PMT::translate(uint64_t va) {
     uint64_t* pte = walk(va, false);
     if (!pte || !pteValid(*pte)) return 0;
-    return pte2pa(*pte);
+    return pte2pa(*pte) + (va & (PAGE_SIZE - 1));
 }
 
 void PMT::activate() const {

@@ -78,12 +78,17 @@ bool VM::copyPMT(PMT* dst, PMT* src) {
 
         auto l1src = (PMT*)MemoryLayout::p2v(PMT::pte2pa(src->m_entries[i]));
         auto l1dst = new PMT();
+        if (!l1dst) return false;
 
         for (int j = 0; j < 512; j++) {
             if (!PMT::pteValid(l1src->m_entries[j])) continue;
 
             auto* l0src = (PMT*)MemoryLayout::p2v(PMT::pte2pa(l1src->m_entries[j]));
             auto* l0dst = new PMT();
+            if (!l0dst) {
+                delete l1dst;
+                return false;
+            }
 
             for (int k = 0; k < 512; k++) {
                 if (!PMT::pteValid(l0src->m_entries[k])) continue;

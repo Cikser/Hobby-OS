@@ -5,6 +5,7 @@ typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
 typedef unsigned long long uint64_t;
+typedef int                int32_t;
 typedef long long          int64_t;
 typedef long               ssize_t;
 typedef unsigned long      size_t;
@@ -196,12 +197,52 @@ static inline void* brk(void* addr) {
     return (void*)_SC1(SYS_BRK, addr);
 }
 
+struct malloc_header {
+    size_t size;
+    int is_free;
+};
+
+#define HEADER_SIZE sizeof(struct malloc_header)
+
+static void* heap_start = (void*)0;
+static void* current_break = (void*)0;
+
 static inline void* malloc(size_t size) {
     if (size == 0) return (void*)0;
-    void* p = mmap((void*)0, size, PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (p == MAP_FAILED) return (void*)0;
-    return p;
+
+    size = (size + 7) & ~7;
+    size_t total_size = size + HEADER_SIZE;
+
+    if (heap_start == (void*)0) {
+        heap_start = brk((void*)0);
+        current_break = heap_start;
+    }
+
+    struct malloc_header* header = (struct malloc_header*)heap_start;
+    while ((void*)header < current_break) {
+        if (header->is_free && header->size >= total_size) {
+            header->is_free = 0;
+            return (void*)(header + 1);
+        }
+        header = (struct malloc_header*)((char*)header + header->size);
+    }
+
+    void* new_block = brk((char*)current_break + total_size);
+    if (new_block == (void*)-1) return (void*)0;
+
+    header = (struct malloc_header*)current_break;
+    header->size = total_size;
+    header->is_free = 0;
+
+    current_break = (char*)current_break + total_size;
+
+    return (void*)(header + 1);
+}
+
+static inline void free(void* ptr) {
+    if (!ptr) return;
+    struct malloc_header* header = (struct malloc_header*)ptr - 1;
+    header->is_free = 1;
 }
 
 static inline void free_pages(void* ptr, size_t size) {

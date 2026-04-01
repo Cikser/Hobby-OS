@@ -28,11 +28,7 @@ int main() {
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
 
-	auto t1 = new Thread(printSleep);
-	auto t2 = new Thread(printPid);
-
-	while (initProc->state() != ProcState::ZOMBIE || t1->state() != ProcState::ZOMBIE
-		|| t2->state() != ProcState::ZOMBIE);
+	while (initProc->state() != ProcState::ZOMBIE);
 
 	Console::kprintf("back in main\n");
 

@@ -21,6 +21,7 @@ public:
         s_cache->free(ptr);
     }
 
+    Process* owner() override { return m_parent; }
     PCB* fork() override { return m_parent->fork(); }
     File* getFile(int fd) override { return m_parent->getFile(fd); }
     uint64_t brk(uint64_t newHeapEnd) override { return m_parent->brk(newHeapEnd); }

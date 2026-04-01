@@ -1,10 +1,10 @@
 #include "vfs.h"
 #include "inode_cache.h"
 #include "path_cache.h"
-
-#include "console.h"
+#include "../io/console/console.h"
 #include "../mm/mem.h"
 #include "ext2/ext2.h"
+#include "../proc/process/process.h"
 
 VfsMount* VFS::m_mount = nullptr;
 
@@ -141,17 +141,29 @@ int VFS::unlink(const char* path) {
 
 VfsInode* VFS::resolvePath(const char* path) {
     if (!m_mount) return nullptr;
-    if (path[0] != '/') return nullptr;
 
-    uint32_t cachedNum = PathCache::lookup(path);
+    char absolutePath[256];
+
+    if (path[0] == '/') {
+        strncpy(absolutePath, path, 255);
+        absolutePath[255] = '\0';
+    }
+    else {
+        Process* running = PCB::runningProcess();
+        if (!running) return nullptr;
+        running->resolveRelative(path, absolutePath);
+        if (absolutePath[0] == '\0') return nullptr;
+    }
+
+    uint32_t cachedNum = PathCache::lookup(absolutePath);
     if (cachedNum != 0) {
         VfsInode* inode = getInode(cachedNum);
         if (inode) return inode;
-        PathCache::invalidate(path);
+        PathCache::invalidate(absolutePath);
     }
 
     VfsInode* current = getInode(2);
-    const char* p = path + 1;
+    const char* p = absolutePath + 1;
 
     while (*p != '\0') {
         char component[256];
@@ -183,7 +195,7 @@ VfsInode* VFS::resolvePath(const char* path) {
             return nullptr;
         }
     }
-    PathCache::insert(path, current->inodeNum());
+    PathCache::insert(absolutePath, current->inodeNum());
 
     return current;
 }

@@ -36,6 +36,8 @@ struct Context {
     uint64_t s11;
 };
 
+class Process;
+
 class PCB {
 public:
     static constexpr uint32_t KERNEL_STACK_SIZE = 4096 * 4;
@@ -54,7 +56,9 @@ public:
     PMT* pmt() const { return m_pmt; }
     static pid_t currentPid() { return s_running->pid(); }
     static PCB* running() { return s_running; }
+    static Process* runningProcess() { return s_running->owner();}
 
+    virtual Process* owner() = 0;
     virtual PCB* fork() = 0;
     virtual File* getFile(int fd) = 0;
     virtual uint64_t brk(uint64_t newHeapEnd) = 0;

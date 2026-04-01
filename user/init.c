@@ -26,6 +26,14 @@ static void demo_fs_ops(void) {
         printf("chdir /subdir: FAIL\n");
     }
 
+    int fd = open("../readme.txt", O_RDONLY);
+    if (fd < 0) printf("Could not open readme.txt\n");
+    else {
+        read(fd, &buf, sizeof(buf));
+        printf("readme.txt: %s\n", buf);
+        close(fd);
+    }
+
     if (chdir("..") == 0) {
         printf("chdir ..: OK\n");
         getcwd(buf, sizeof(buf));

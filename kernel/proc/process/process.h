@@ -26,7 +26,9 @@ public:
     static Process* createInit();
     int exec(const char* elfPath) override;
     Thread* createThread(void(*entry)(void*));
+    void resolveRelative(const char* path, char* out) const;
 
+    Process* owner() override { return this; }
     Process* fork() override;
     File* getFile(int fd) override;
     uint64_t brk(uint64_t newHeapEnd) override;
@@ -52,7 +54,6 @@ private:
     static KMemCache<Process>* s_cache;
 
     Process(PMT* pmt, uint64_t entry, Process* parent);
-    void resolveRelative(const char* path, char* out) const;
 
     Thread* m_threads;
     Process* m_parent;

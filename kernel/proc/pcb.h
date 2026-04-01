@@ -59,22 +59,7 @@ public:
     static Process* runningProcess() { return s_running->owner();}
 
     virtual Process* owner() = 0;
-    virtual PCB* fork() = 0;
-    virtual File* getFile(int fd) = 0;
-    virtual uint64_t brk(uint64_t newHeapEnd) = 0;
-    virtual uint64_t openFile(char* path, uint64_t flags) = 0;
-    virtual int closeFile(int fd) = 0;
-    virtual SegmentTable* segmentTable() const = 0;
     virtual void exit(int exitCode = 0) = 0;
-    virtual pid_t wait(pid_t pid, int* status = nullptr) = 0;
-    virtual int exec(const char* elfPath) = 0;
-    virtual uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
-                      int fd, uint64_t offset) = 0;
-    virtual int munmap(uint64_t addr, uint64_t length) = 0;
-    virtual int mprotect(uint64_t addr, uint64_t length, uint32_t prot) = 0;
-    virtual int getcwd(char* buf, size_t size) = 0;
-    virtual int chdir(const char* path) = 0;
-    virtual int mkdir(const char* path, uint32_t mode) = 0;
 
 protected:
     friend class Scheduler;

@@ -2,7 +2,7 @@
 #include "../../fs/file.h"
 #include "../../hw/memlayout.h"
 #include "../../mm/mem.h"
-#include "../../proc/pcb.h"
+#include "../../proc/process/process.h"
 
 KMemCache<MmapRegion>* MmapRegion::s_cache = nullptr;
 KMemCache<Mmap>* Mmap::s_cache = nullptr;
@@ -331,7 +331,7 @@ bool Mmap::isFree(uint64_t addr, uint64_t len) const {
 
 int Mmap::fillFromFile(uint64_t vaStart, uint64_t pages,
                        int fd, uint64_t offset, uint64_t fileLen) const {
-    File* file = PCB::running()->getFile(fd);
+    File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
 
     uint64_t remaining = fileLen;

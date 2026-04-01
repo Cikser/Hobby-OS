@@ -37,21 +37,21 @@ uint64_t SyscallHandler::sys_getpid(TrapFrame* tf) {
 }
 
 uint64_t SyscallHandler::sys_exit(TrapFrame* tf) {
-    PCB::running()->exit();
+    PCB::runningProcess()->exit((int)(int64_t)tf->a0);
     return 0;
 }
 
 uint64_t SyscallHandler::sys_fork(TrapFrame* tf) {
-    PCB* child = PCB::running()->fork();
+    PCB* child = PCB::runningProcess()->fork();
     return child->pid();
 }
 
 uint64_t SyscallHandler::sys_write(TrapFrame* tf) {
-    int fd = tf->a0;
+    int fd = (int)(int64_t)tf->a0;
     uint64_t buf = tf->a1;
     uint64_t len = tf->a2;
 
-    File* file = PCB::running()->getFile(fd);
+    File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
@@ -62,11 +62,11 @@ uint64_t SyscallHandler::sys_write(TrapFrame* tf) {
 }
 
 uint64_t SyscallHandler::sys_read(TrapFrame* tf) {
-    int fd = tf->a0;
+    int fd = (int)(int64_t)tf->a0;
     uint64_t buf = tf->a1;
     uint64_t len = tf->a2;
 
-    File* file = PCB::running()->getFile(fd);
+    File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
@@ -78,7 +78,7 @@ uint64_t SyscallHandler::sys_read(TrapFrame* tf) {
 
 uint64_t SyscallHandler::sys_brk(TrapFrame* tf) {
     uint64_t newBrk = tf->a0;
-    return PCB::running()->brk(newBrk);
+    return PCB::runningProcess()->brk(newBrk);
 }
 
 uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
@@ -93,12 +93,12 @@ uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
     strcpy(path, src);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
-    return PCB::running()->openFile(path, flags);
+    return PCB::runningProcess()->openFile(path, flags);
 }
 
 uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
-    int fd = tf->a0;
-    return PCB::running()->closeFile(fd);
+    int fd = (int)(int64_t)tf->a0;
+    return PCB::runningProcess()->closeFile(fd);
 }
 
 uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
@@ -109,7 +109,7 @@ uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
     strcpy(path, (char*)pathAddr);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
-    auto* proc = PCB::running();
+    auto* proc = PCB::runningProcess();
 
     return proc->exec(path);
 }
@@ -118,7 +118,7 @@ uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
     pid_t pid = tf->a0;
     uint64_t statusAddr = tf->a1;
 
-    auto proc = PCB::running();
+    auto proc = PCB::runningProcess();
 
     int status = 0;
     pid_t ret = proc->wait(pid, statusAddr ? &status : nullptr);
@@ -140,21 +140,21 @@ uint64_t SyscallHandler::sys_mmap(TrapFrame* tf) {
     int fd = (int)(int64_t)tf->a4;
     uint64_t offset = tf->a5;
 
-    uint64_t va = PCB::running()->mmap(addr, length, prot, flags, fd, offset);
+    uint64_t va = PCB::runningProcess()->mmap(addr, length, prot, flags, fd, offset);
     return va;
 }
 
 uint64_t SyscallHandler::sys_munmap(TrapFrame* tf) {
     uint64_t addr = tf->a0;
     uint64_t length = tf->a1;
-    return (uint64_t)PCB::running()->munmap(addr, length);
+    return (uint64_t)PCB::runningProcess()->munmap(addr, length);
 }
 
 uint64_t SyscallHandler::sys_mprotect(TrapFrame* tf) {
     uint64_t addr = tf->a0;
     uint64_t length = tf->a1;
     auto prot = (uint32_t)tf->a2;
-    return (uint64_t)PCB::running()->mprotect(addr, length, prot);
+    return (uint64_t)PCB::runningProcess()->mprotect(addr, length, prot);
 }
 
 uint64_t SyscallHandler::sys_getcwd(TrapFrame* tf) {
@@ -164,7 +164,7 @@ uint64_t SyscallHandler::sys_getcwd(TrapFrame* tf) {
     if (!buf || size == 0) return (uint64_t)-1;
 
     char kbuf[256];
-    int ret = PCB::running()->getcwd(kbuf, sizeof(kbuf));
+    int ret = PCB::runningProcess()->getcwd(kbuf, sizeof(kbuf));
     if (ret < 0) return (uint64_t)-1;
 
     uint64_t needed = strlen(kbuf) + 1;
@@ -184,18 +184,18 @@ uint64_t SyscallHandler::sys_chdir(TrapFrame* tf) {
     strcpy(path, (char*)tf->a0);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
-    int ret = PCB::running()->chdir(path);
+    int ret = PCB::runningProcess()->chdir(path);
     return (ret == 0) ? 0 : (uint64_t)-1;
 }
 
 uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
     char path[256];
-    uint32_t mode = (uint32_t)tf->a1;
+    auto mode = (uint32_t)tf->a1;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     strcpy(path, (char*)tf->a0);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
-    int ret = PCB::running()->mkdir(path, mode);
+    int ret = PCB::runningProcess()->mkdir(path, mode);
     return (ret == 0) ? 0 : (uint64_t)-1;
 }

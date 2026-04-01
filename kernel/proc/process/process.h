@@ -24,26 +24,26 @@ public:
     }
 
     static Process* createInit();
-    int exec(const char* elfPath) override;
     Thread* createThread(void(*entry)(void*));
     void resolveRelative(const char* path, char* out) const;
 
     Process* owner() override { return this; }
-    Process* fork() override;
-    File* getFile(int fd) override;
-    uint64_t brk(uint64_t newHeapEnd) override;
-    uint64_t openFile(char* path, uint64_t flags) override;
-    int closeFile(int fd) override;
-    SegmentTable* segmentTable() const override { return m_segTable; };
+    int exec(const char* elfPath);
+    Process* fork();
+    File* getFile(int fd);
+    uint64_t brk(uint64_t newHeapEnd);
+    uint64_t openFile(char* path, uint64_t flags);
+    int closeFile(int fd);
+    SegmentTable* segmentTable() const { return m_segTable; };
     void exit(int exitCode) override;
-    pid_t wait(pid_t pid, int* status) override;
+    pid_t wait(pid_t pid, int* status);
     uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
-        int fd, uint64_t offset) override;
-    int mprotect(uint64_t addr, uint64_t length, uint32_t prot) override;
-    int munmap(uint64_t addr, uint64_t length) override;
-    int getcwd(char* buf, size_t size) override;
-    int chdir(const char* path) override;
-    int mkdir(const char* path, uint32_t mode) override;
+        int fd, uint64_t offset);
+    int mprotect(uint64_t addr, uint64_t length, uint32_t prot);
+    int munmap(uint64_t addr, uint64_t length);
+    int getcwd(char* buf, size_t size);
+    int chdir(const char* path);
+    int mkdir(const char* path, uint32_t mode);
 
 private:
     friend class Thread;

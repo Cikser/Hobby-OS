@@ -36,6 +36,9 @@ public:
         return m_parent->mprotect(addr, length, prot);
     }
     int munmap(uint64_t addr, uint64_t length) override { return m_parent->munmap(addr, length); }
+    int getcwd(char* buf, size_t size) override { return m_parent->getcwd(buf, size); }
+    int chdir(const char* path) override { return m_parent->chdir(path); }
+    int mkdir(const char* path, uint32_t mode) override { return m_parent->mkdir(path, mode); }
 
 private:
     friend class Process;

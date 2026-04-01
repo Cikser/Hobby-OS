@@ -68,6 +68,9 @@ public:
                       int fd, uint64_t offset) = 0;
     virtual int munmap(uint64_t addr, uint64_t length) = 0;
     virtual int mprotect(uint64_t addr, uint64_t length, uint32_t prot) = 0;
+    virtual int getcwd(char* buf, size_t size) = 0;
+    virtual int chdir(const char* path) = 0;
+    virtual int mkdir(const char* path, uint32_t mode) = 0;
 
 protected:
     friend class Scheduler;

@@ -39,6 +39,9 @@ public:
         int fd, uint64_t offset) override;
     int mprotect(uint64_t addr, uint64_t length, uint32_t prot) override;
     int munmap(uint64_t addr, uint64_t length) override;
+    int getcwd(char* buf, size_t size) override;
+    int chdir(const char* path) override;
+    int mkdir(const char* path, uint32_t mode) override;
 
 private:
     friend class Thread;
@@ -49,11 +52,14 @@ private:
     static KMemCache<Process>* s_cache;
 
     Process(PMT* pmt, uint64_t entry, Process* parent);
+    void resolveRelative(const char* path, char* out) const;
 
     Thread* m_threads;
     Process* m_parent;
     File* m_fds[MAX_FDS]{};
     SegmentTable* m_segTable;
+    uint32_t m_cwdInode;
+    char m_cwdPath[256];
     Process* m_nextSibling;
     Process* m_firstChild;
     int m_exitCode;

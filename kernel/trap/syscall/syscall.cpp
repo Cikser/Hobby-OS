@@ -22,6 +22,9 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_MMAP: tf->a0 = sys_mmap(tf); break;
     case SYS_MUNMAP: tf->a0 = sys_munmap(tf); break;
     case SYS_MPROTECT: tf->a0 = sys_mprotect(tf); break;
+    case SYS_GETCWD: tf->a0 = sys_getcwd(tf); break;
+    case SYS_CHDIR: tf->a0 = sys_chdir(tf); break;
+    case SYS_MKDIR: tf->a0 = sys_mkdir(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -152,4 +155,47 @@ uint64_t SyscallHandler::sys_mprotect(TrapFrame* tf) {
     uint64_t length = tf->a1;
     auto prot = (uint32_t)tf->a2;
     return (uint64_t)PCB::running()->mprotect(addr, length, prot);
+}
+
+uint64_t SyscallHandler::sys_getcwd(TrapFrame* tf) {
+    auto buf = (char*)tf->a0;
+    uint64_t size = tf->a1;
+
+    if (!buf || size == 0) return (uint64_t)-1;
+
+    char kbuf[256];
+    int ret = PCB::running()->getcwd(kbuf, sizeof(kbuf));
+    if (ret < 0) return (uint64_t)-1;
+
+    uint64_t needed = strlen(kbuf) + 1;
+    if (needed > size) return (uint64_t)-1;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    memcpy(buf, kbuf, needed);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_chdir(TrapFrame* tf) {
+    char path[256];
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    strcpy(path, (char*)tf->a0);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    int ret = PCB::running()->chdir(path);
+    return (ret == 0) ? 0 : (uint64_t)-1;
+}
+
+uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
+    char path[256];
+    uint32_t mode = (uint32_t)tf->a1;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    strcpy(path, (char*)tf->a0);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    int ret = PCB::running()->mkdir(path, mode);
+    return (ret == 0) ? 0 : (uint64_t)-1;
 }

@@ -14,6 +14,7 @@ public:
     static int unlink(const char* path);
 
 private:
+    friend class Process;
     static VfsInode* resolvePath(const char* path);
     static VfsInode* resolveParent(const char* path, const char** outName);
 

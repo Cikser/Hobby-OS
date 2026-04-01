@@ -14,12 +14,14 @@ typedef void*              mmap_ptr_t;
 
 #define SYS_GETCWD       17
 #define SYS_IOCTL        29
+#define SYS_CHDIR        49
 #define SYS_OPENAT       56
 #define SYS_CLOSE        57
 #define SYS_READ         63
 #define SYS_WRITE        64
 #define SYS_READV        65
 #define SYS_WRITEV       66
+#define SYS_MKDIR        83
 #define SYS_EXIT         93
 #define SYS_EXIT_GROUP   94
 #define SYS_MMAP         222
@@ -83,6 +85,18 @@ static inline long __syscall(long num,
 #define _SC4(n,a,b,c,d)         __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),0,0)
 #define _SC5(n,a,b,c,d,e)       __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),(long)(e),0)
 #define _SC6(n,a,b,c,d,e,f)     __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),(long)(e),(long)(f))
+
+static inline int getcwd(char* buf, size_t size) {
+    return (int)_SC2(SYS_GETCWD, buf, size);
+}
+
+static inline int chdir(const char* path) {
+    return (int)_SC1(SYS_CHDIR, path);
+}
+
+static inline int mkdir(const char* path, uint32_t mode) {
+    return (int)_SC2(SYS_MKDIR, path, mode);
+}
 
 static inline void exit(int code) {
     _SC1(SYS_EXIT, code);

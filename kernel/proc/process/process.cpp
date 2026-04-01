@@ -37,6 +37,9 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
         m_segTable = new SegmentTable();
         m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
             USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
+        m_cwdInode = 2;
+        m_cwdPath[0] = '/';
+        m_cwdPath[1] = '\0';
         m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
         m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
         m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
@@ -90,6 +93,8 @@ Process* Process::fork() {
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
 
     child->m_segTable = SegmentTable::copy(m_segTable);
+    child->m_cwdInode = m_cwdInode;
+    strcpy(child->m_cwdPath, m_cwdPath);
     delete child->m_mmap;
     child->m_mmap = m_mmap
         ? m_mmap->clone(child->m_pmt, child->m_segTable)
@@ -305,4 +310,81 @@ int Process::mprotect(uint64_t addr, uint64_t length, uint32_t prot) {
     int ret = m_mmap->protect(addr, length, prot);
     m_spaceLock.release();
     return ret;
+}
+
+void Process::resolveRelative(const char* path, char* out) const {
+    if (path[0] == '/') {
+        strcpy(out, path);
+        return;
+    }
+
+    uint32_t cwdLen = strlen(m_cwdPath);
+    uint32_t pathLen = strlen(path);
+
+    if (cwdLen + 1 + pathLen >= 255) {
+        out[0] = '\0';
+        return;
+    }
+
+    memcpy(out, m_cwdPath, cwdLen);
+
+    if (cwdLen > 1 || m_cwdPath[0] != '/') {
+        out[cwdLen++] = '/';
+    }
+
+    memcpy(out + cwdLen, path, pathLen + 1);
+}
+
+int Process::getcwd(char* buf, uint64_t size) {
+    if (!buf || size == 0) return -1;
+
+    uint64_t needed = strlen(m_cwdPath) + 1;
+    if (needed > size) return -1;
+
+    memcpy(buf, m_cwdPath, needed);
+    return 0;
+}
+
+int Process::chdir(const char* path) {
+    if (!path || path[0] == '\0') return -1;
+
+    char resolved[256];
+    resolveRelative(path, resolved);
+    if (resolved[0] == '\0') return -1;
+
+    File* f = VFS::open(resolved, File::O_RDONLY);
+    if (!f) return -1;
+
+    f->close();
+    delete f;
+
+    VfsInode* inode = VFS::resolvePath(resolved);
+    if (!inode) return -1;
+
+    if (!inode->isDir()) {
+        VFS::putInode(inode, inode->inodeNum());
+        return -1;
+    }
+
+    uint32_t newInodeNum = inode->inodeNum();
+    VFS::putInode(inode, newInodeNum);
+
+    m_cwdInode = newInodeNum;
+    strcpy(m_cwdPath, resolved);
+
+    uint32_t len = strlen(m_cwdPath);
+    if (len > 1 && m_cwdPath[len - 1] == '/')
+        m_cwdPath[len - 1] = '\0';
+
+    return 0;
+}
+
+int Process::mkdir(const char* path, uint32_t mode) {
+    if (!path || path[0] == '\0') return -1;
+
+    char resolved[256];
+    resolveRelative(path, resolved);
+    if (resolved[0] == '\0') return -1;
+
+    return VFS::mkdir(resolved);
 }

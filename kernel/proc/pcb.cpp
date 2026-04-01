@@ -1,5 +1,6 @@
 #include "pcb.h"
 #include "scheduler.h"
+#include "vfs.h"
 #include "../hw/riscv.h"
 #include "../io/console/console.h"
 #include "../mm/mem.h"

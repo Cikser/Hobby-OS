@@ -30,6 +30,12 @@ public:
     void exit(int exitCode) override;
     pid_t wait(pid_t pid, int* status) override { return -1; }
     int exec(const char* elfPath) override { return -1; }
+    uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
+        int fd, uint64_t offset) override { return m_parent->mmap(addr, length, prot, flags, fd, offset); }
+    int mprotect(uint64_t addr, uint64_t length, uint32_t prot) override {
+        return m_parent->mprotect(addr, length, prot);
+    }
+    int munmap(uint64_t addr, uint64_t length) override { return m_parent->munmap(addr, length); }
 
 private:
     friend class Process;

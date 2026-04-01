@@ -19,6 +19,9 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_WRITE: tf->a0 = sys_write(tf); break;
     case SYS_OPENAT: tf->a0 = sys_openat(tf); break;
     case SYS_CLOSE: tf->a0 = sys_close(tf); break;
+    case SYS_MMAP: tf->a0 = sys_mmap(tf); break;
+    case SYS_MUNMAP: tf->a0 = sys_munmap(tf); break;
+    case SYS_MPROTECT: tf->a0 = sys_mprotect(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -124,4 +127,29 @@ uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
     }
 
     return ret;
+}
+
+uint64_t SyscallHandler::sys_mmap(TrapFrame* tf) {
+    uint64_t addr = tf->a0;
+    uint64_t length = tf->a1;
+    auto prot = (uint32_t)tf->a2;
+    auto flags = (uint32_t)tf->a3;
+    int fd = (int)(int64_t)tf->a4;
+    uint64_t offset = tf->a5;
+
+    uint64_t va = PCB::running()->mmap(addr, length, prot, flags, fd, offset);
+    return va;
+}
+
+uint64_t SyscallHandler::sys_munmap(TrapFrame* tf) {
+    uint64_t addr = tf->a0;
+    uint64_t length = tf->a1;
+    return (uint64_t)PCB::running()->munmap(addr, length);
+}
+
+uint64_t SyscallHandler::sys_mprotect(TrapFrame* tf) {
+    uint64_t addr = tf->a0;
+    uint64_t length = tf->a1;
+    auto prot = (uint32_t)tf->a2;
+    return (uint64_t)PCB::running()->mprotect(addr, length, prot);
 }

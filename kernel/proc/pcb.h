@@ -64,6 +64,10 @@ public:
     virtual void exit(int exitCode = 0) = 0;
     virtual pid_t wait(pid_t pid, int* status = nullptr) = 0;
     virtual int exec(const char* elfPath) = 0;
+    virtual uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
+                      int fd, uint64_t offset) = 0;
+    virtual int munmap(uint64_t addr, uint64_t length) = 0;
+    virtual int mprotect(uint64_t addr, uint64_t length, uint32_t prot) = 0;
 
 protected:
     friend class Scheduler;

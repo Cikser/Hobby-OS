@@ -17,7 +17,8 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
     m_firstChild(nullptr),
     m_exitCode(0),
     m_selfSem(Semaphore(0)),
-    m_spaceLock(Lock())
+    m_spaceLock(Lock()),
+    m_mmap(nullptr)
 {
     if (parent) {
         for (int i = 0; i < MAX_FDS; i++) {
@@ -39,6 +40,7 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
         m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
         m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
         m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
+        m_mmap = new Mmap(m_pmt, m_segTable);
     }
 }
 
@@ -54,6 +56,7 @@ Process::~Process() {
         fd->close();
         delete fd;
     }
+    delete m_mmap;
     delete m_segTable;
     VM::destroyPMT(m_pmt);
 }
@@ -87,6 +90,10 @@ Process* Process::fork() {
     child->m_trapFrame->kstack = (uint64_t)child->m_kstack + KERNEL_STACK_SIZE;
 
     child->m_segTable = SegmentTable::copy(m_segTable);
+    delete child->m_mmap;
+    child->m_mmap = m_mmap
+        ? m_mmap->clone(child->m_pmt, child->m_segTable)
+        : new Mmap(child->m_pmt, child->m_segTable);
     m_spaceLock.release();
     m_lock.acquire();
     if (!m_firstChild) {
@@ -271,4 +278,31 @@ pid_t Process::wait(pid_t pid, int* status) {
     // todo garbage collection
     //delete zombie;
     return retPid;
+}
+
+uint64_t Process::mmap(uint64_t addr, uint64_t length,
+                       uint32_t prot, uint32_t flags,
+                       int fd, uint64_t offset)
+{
+    if (!m_mmap) return (uint64_t)-1;
+    m_spaceLock.acquire();
+    uint64_t ret = m_mmap->map(addr, length, prot, flags, fd, offset);
+    m_spaceLock.release();
+    return ret;
+}
+
+int Process::munmap(uint64_t addr, uint64_t length) {
+    if (!m_mmap) return -1;
+    m_spaceLock.acquire();
+    int ret = m_mmap->unmap(addr, length);
+    m_spaceLock.release();
+    return ret;
+}
+
+int Process::mprotect(uint64_t addr, uint64_t length, uint32_t prot) {
+    if (!m_mmap) return -1;
+    m_spaceLock.acquire();
+    int ret = m_mmap->protect(addr, length, prot);
+    m_spaceLock.release();
+    return ret;
 }

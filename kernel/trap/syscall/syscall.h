@@ -17,8 +17,11 @@ enum Syscall {
     SYS_EXIT_GROUP = 94,
     SYS_GETPID = 172,
     SYS_BRK = 214,
+    SYS_MUNMAP = 215,
     SYS_FORK = 220,
     SYS_EXECVE = 221,
+    SYS_MMAP = 222,
+    SYS_MPROTECT = 226,
     SYS_WAIT4 = 260,
 };
 
@@ -37,6 +40,9 @@ private:
     static uint64_t sys_openat(TrapFrame* tf);
     static uint64_t sys_close(TrapFrame* tf);
     static uint64_t sys_brk(TrapFrame* tf);
+    static uint64_t sys_mmap(TrapFrame* tf);
+    static uint64_t sys_munmap(TrapFrame* tf);
+    static uint64_t sys_mprotect(TrapFrame* tf);
 };
 
 #endif

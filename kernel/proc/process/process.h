@@ -1,6 +1,8 @@
 #ifndef RISC_V_PROCESS_H
 #define RISC_V_PROCESS_H
 
+#include "../../mm/vm/mmap.h"
+#include "../sync/sem.h"
 #include "../pcb.h"
 #include "../../fs/file.h"
 
@@ -33,6 +35,10 @@ public:
     SegmentTable* segmentTable() const override { return m_segTable; };
     void exit(int exitCode) override;
     pid_t wait(pid_t pid, int* status) override;
+    uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
+        int fd, uint64_t offset) override;
+    int mprotect(uint64_t addr, uint64_t length, uint32_t prot) override;
+    int munmap(uint64_t addr, uint64_t length) override;
 
 private:
     friend class Thread;
@@ -53,6 +59,7 @@ private:
     int m_exitCode;
     Semaphore m_selfSem;
     Lock m_spaceLock;
+    Mmap* m_mmap;
 };
 
 #endif

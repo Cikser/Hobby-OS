@@ -21,6 +21,10 @@ typedef void*              mmap_ptr_t;
 #define SYS_READV        65
 #define SYS_WRITEV       66
 #define SYS_EXIT         93
+#define SYS_EXIT_GROUP   94
+#define SYS_MMAP         222
+#define SYS_MUNMAP       215
+#define SYS_MPROTECT     226
 #define SYS_GETPID       172
 #define SYS_BRK          214
 #define SYS_FORK         220
@@ -37,6 +41,19 @@ typedef void*              mmap_ptr_t;
 #define O_CREAT    0x40
 #define O_TRUNC    0x200
 #define O_APPEND   0x400
+
+#define PROT_NONE    0x0
+#define PROT_READ    0x1
+#define PROT_WRITE   0x2
+#define PROT_EXEC    0x4
+
+#define MAP_SHARED     0x01
+#define MAP_PRIVATE    0x02
+#define MAP_FIXED      0x10
+#define MAP_ANONYMOUS  0x20
+#define MAP_ANON       MAP_ANONYMOUS
+
+#define MAP_FAILED     ((void*)-1)
 
 #define WIFEXITED(s)    (((s) & 0x7f) == 0)
 #define WEXITSTATUS(s)  (((s) >> 8) & 0xff)
@@ -69,7 +86,10 @@ static inline long __syscall(long num,
 
 static inline void exit(int code) {
     _SC1(SYS_EXIT, code);
-    while (1) {}
+}
+
+static inline void exit_group(int code) {
+    _SC1(SYS_EXIT_GROUP, code);
 }
 
 static inline pid_t getpid(void) {
@@ -114,8 +134,35 @@ static inline ssize_t write(int fd, const void* buf, size_t len) {
     return (ssize_t)_SC3(SYS_WRITE, fd, buf, len);
 }
 
+static inline void* mmap(void* addr, size_t length, int prot,
+                          int flags, int fd, long offset)
+{
+    void* ret = (void*)_SC6(SYS_MMAP, addr, length, prot, flags, fd, offset);
+    return ret;
+}
+
+static inline int munmap(void* addr, size_t length) {
+    return (int)_SC2(SYS_MUNMAP, addr, length);
+}
+
+static inline int mprotect(void* addr, size_t length, int prot) {
+    return (int)_SC3(SYS_MPROTECT, addr, length, prot);
+}
+
 static inline void* brk(void* addr) {
     return (void*)_SC1(SYS_BRK, addr);
+}
+
+static inline void* malloc(size_t size) {
+    if (size == 0) return (void*)0;
+    void* p = mmap((void*)0, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (p == MAP_FAILED) return (void*)0;
+    return p;
+}
+
+static inline void free_pages(void* ptr, size_t size) {
+    munmap(ptr, size);
 }
 
 static inline size_t strlen(const char* s) {

@@ -182,7 +182,7 @@ uint64_t Process::brk(uint64_t newHeapEnd) {
     return heapEnd;
 }
 
-uint64_t Process::openFile(char* path, uint64_t flags) {
+uint64_t Process::openFile(const char* path, uint64_t flags) {
     File* file = VFS::open(path, flags);
     if (!file) return -1;
 
@@ -313,29 +313,70 @@ int Process::mprotect(uint64_t addr, uint64_t length, uint32_t prot) {
 }
 
 void Process::resolveRelative(const char* path, char* out) const {
+    char temp[256];
+    uint32_t len = 0;
+
     if (path[0] == '/') {
-        strcpy(out, path);
-        return;
+        temp[0] = '/';
+        temp[1] = '\0';
+        len = 1;
+    }
+    else {
+        uint32_t cwdLen = strlen(m_cwdPath);
+        memcpy(temp, m_cwdPath, cwdLen + 1);
+        len = cwdLen;
     }
 
-    uint32_t cwdLen = strlen(m_cwdPath);
-    uint32_t pathLen = strlen(path);
+    const char* p = (path[0] == '/') ? path + 1 : path;
 
-    if (cwdLen + 1 + pathLen >= 255) {
-        out[0] = '\0';
-        return;
+    while (*p != '\0') {
+        char component[64];
+        int cLen = 0;
+
+        while (*p != '\0' && *p != '/' && cLen < 63) {
+            component[cLen++] = *p++;
+        }
+        component[cLen] = '\0';
+        if (*p == '/') p++;
+        if (cLen == 0) continue;
+
+        if (strcmp(component, ".") == 0) {
+            continue;
+        }
+        if (strcmp(component, "..") == 0) {
+            if (len > 1) {
+                len--;
+                while (len > 0 && temp[len] != '/') {
+                    len--;
+                }
+                if (len == 0) len = 1;
+                temp[len] = '\0';
+            }
+        } else {
+            if ((len > 1 && temp[len-1] != '/') || (len == 1 && temp[0] != '/'))
+                temp[len++] = '/';
+
+            if (len + cLen < 255) {
+                memcpy(temp + len, component, cLen);
+                len += cLen;
+                temp[len] = '\0';
+            }
+            else {
+                out[0] = '\0';
+                return;
+            }
+        }
     }
 
-    memcpy(out, m_cwdPath, cwdLen);
-
-    if (cwdLen > 1 || m_cwdPath[0] != '/') {
-        out[cwdLen++] = '/';
+    if (len == 0) {
+        temp[0] = '/';
+        temp[1] = '\0';
     }
 
-    memcpy(out + cwdLen, path, pathLen + 1);
+    memcpy(out, temp, len + 1);
 }
 
-int Process::getcwd(char* buf, uint64_t size) {
+int Process::getcwd(char* buf, uint64_t size) const {
     if (!buf || size == 0) return -1;
 
     uint64_t needed = strlen(m_cwdPath) + 1;
@@ -379,7 +420,7 @@ int Process::chdir(const char* path) {
     return 0;
 }
 
-int Process::mkdir(const char* path, uint32_t mode) {
+int Process::mkdir(const char* path, uint32_t mode) const {
     if (!path || path[0] == '\0') return -1;
 
     char resolved[256];

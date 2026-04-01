@@ -32,7 +32,7 @@ public:
     Process* fork();
     File* getFile(int fd);
     uint64_t brk(uint64_t newHeapEnd);
-    uint64_t openFile(char* path, uint64_t flags);
+    uint64_t openFile(const char* path, uint64_t flags);
     int closeFile(int fd);
     SegmentTable* segmentTable() const { return m_segTable; };
     void exit(int exitCode) override;
@@ -41,9 +41,9 @@ public:
         int fd, uint64_t offset);
     int mprotect(uint64_t addr, uint64_t length, uint32_t prot);
     int munmap(uint64_t addr, uint64_t length);
-    int getcwd(char* buf, size_t size);
+    int getcwd(char* buf, size_t size) const;
     int chdir(const char* path);
-    int mkdir(const char* path, uint32_t mode);
+    int mkdir(const char* path, uint32_t mode) const;
 
 private:
     friend class Thread;
@@ -60,7 +60,7 @@ private:
     File* m_fds[MAX_FDS]{};
     SegmentTable* m_segTable;
     uint32_t m_cwdInode;
-    char m_cwdPath[256];
+    char m_cwdPath[256]{};
     Process* m_nextSibling;
     Process* m_firstChild;
     int m_exitCode;

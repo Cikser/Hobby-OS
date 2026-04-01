@@ -21,6 +21,7 @@ typedef void*              mmap_ptr_t;
 #define SYS_WRITE        64
 #define SYS_READV        65
 #define SYS_WRITEV       66
+#define SYS_FSTAT        80
 #define SYS_MKDIR        83
 #define SYS_EXIT         93
 #define SYS_EXIT_GROUP   94
@@ -85,6 +86,34 @@ static inline long __syscall(long num,
 #define _SC4(n,a,b,c,d)         __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),0,0)
 #define _SC5(n,a,b,c,d,e)       __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),(long)(e),0)
 #define _SC6(n,a,b,c,d,e,f)     __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),(long)(e),(long)(f))
+
+struct stat {
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint32_t st_mode;
+    uint32_t st_nlink;
+    uint32_t st_uid;
+    uint32_t st_gid;
+    uint64_t st_rdev;
+    uint64_t _pad1;
+    int64_t  st_size;
+    int  st_blksize;
+    int  _pad2;
+    int64_t  st_blocks;
+
+    int64_t  st_atime_sec;
+    int64_t  st_atime_nsec;
+    int64_t  st_mtime_sec;
+    int64_t  st_mtime_nsec;
+    int64_t  st_ctime_sec;
+    int64_t  st_ctime_nsec;
+
+    uint32_t _unused[2];
+};
+
+static inline int fstat(int fd, struct stat* st) {
+    return (int)_SC2(SYS_FSTAT, fd, st);
+}
 
 static inline int getcwd(char* buf, size_t size) {
     return (int)_SC2(SYS_GETCWD, buf, size);

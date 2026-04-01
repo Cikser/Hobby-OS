@@ -69,3 +69,8 @@ void File::close() {
     m_inode = nullptr;
     m_mount = nullptr;
 }
+
+int File::fstat(InodeStat* st) const {
+    if (!m_inode) return -1;
+    return m_inode->stat(st);
+}

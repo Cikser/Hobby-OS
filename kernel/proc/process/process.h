@@ -30,20 +30,21 @@ public:
     Process* owner() override { return this; }
     int exec(const char* elfPath);
     Process* fork();
-    File* getFile(int fd);
-    uint64_t brk(uint64_t newHeapEnd);
+    File* getFile(int fd) const;
+    uint64_t brk(uint64_t newHeapEnd) const;
     uint64_t openFile(const char* path, uint64_t flags);
     int closeFile(int fd);
     SegmentTable* segmentTable() const { return m_segTable; };
     void exit(int exitCode) override;
     pid_t wait(pid_t pid, int* status);
     uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
-        int fd, uint64_t offset);
-    int mprotect(uint64_t addr, uint64_t length, uint32_t prot);
-    int munmap(uint64_t addr, uint64_t length);
+        int fd, uint64_t offset) const;
+    int mprotect(uint64_t addr, uint64_t length, uint32_t prot) const;
+    int munmap(uint64_t addr, uint64_t length) const;
     int getcwd(char* buf, size_t size) const;
     int chdir(const char* path);
     int mkdir(const char* path, uint32_t mode) const;
+    int fstat(int fd, InodeStat* st) const;
 
 private:
     friend class Thread;
@@ -65,7 +66,7 @@ private:
     Process* m_firstChild;
     int m_exitCode;
     Semaphore m_selfSem;
-    Lock m_spaceLock;
+    mutable Lock m_spaceLock;
     Mmap* m_mmap;
 };
 

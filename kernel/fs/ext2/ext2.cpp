@@ -590,14 +590,23 @@ uint64_t Ext2Inode::size() {
 
 int Ext2Inode::stat(InodeStat* out) {
     if (!out) return -1;
-    out->size = m_raw.i_size;
-    out->atime = m_raw.i_atime;
-    out->mtime = m_raw.i_mtime;
-    out->ctime = m_raw.i_ctime;
-    out->gid = m_raw.i_gid;
-    out->uid = m_raw.i_uid;
-    out->mode = m_raw.i_mode;
-    out->nlinks = m_raw.i_links_count;
+
+    memset(out, 0, sizeof(InodeStat));
+
+    out->st_ino = m_num;
+    out->st_mode = m_raw.i_mode;
+    out->st_nlink = m_raw.i_links_count;
+    out->st_uid = m_raw.i_uid;
+    out->st_gid = m_raw.i_gid;
+    out->st_size = m_raw.i_size;
+
+    out->st_blocks = m_raw.i_blocks;
+    out->st_blksize = m_mount->blockSize();
+
+    out->st_atime_sec = m_raw.i_atime;
+    out->st_mtime_sec = m_raw.i_mtime;
+    out->st_ctime_sec = m_raw.i_ctime;
+
     return 0;
 }
 

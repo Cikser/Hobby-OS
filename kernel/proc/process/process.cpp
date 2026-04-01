@@ -112,7 +112,7 @@ Process* Process::fork() {
     return child;
 }
 
-File* Process::getFile(int fd) {
+File* Process::getFile(int fd) const {
     if (fd < 0 || fd >= MAX_FDS) return nullptr;
 
     m_lock.acquire();
@@ -142,7 +142,7 @@ int Process::exec(const char* elfPath) {
     return 0;
 }
 
-uint64_t Process::brk(uint64_t newHeapEnd) {
+uint64_t Process::brk(uint64_t newHeapEnd) const {
     m_spaceLock.acquire();
 
     uint64_t heapStart = m_segTable->heap()->start;
@@ -287,8 +287,7 @@ pid_t Process::wait(pid_t pid, int* status) {
 
 uint64_t Process::mmap(uint64_t addr, uint64_t length,
                        uint32_t prot, uint32_t flags,
-                       int fd, uint64_t offset)
-{
+                       int fd, uint64_t offset) const {
     if (!m_mmap) return (uint64_t)-1;
     m_spaceLock.acquire();
     uint64_t ret = m_mmap->map(addr, length, prot, flags, fd, offset);
@@ -296,7 +295,7 @@ uint64_t Process::mmap(uint64_t addr, uint64_t length,
     return ret;
 }
 
-int Process::munmap(uint64_t addr, uint64_t length) {
+int Process::munmap(uint64_t addr, uint64_t length) const {
     if (!m_mmap) return -1;
     m_spaceLock.acquire();
     int ret = m_mmap->unmap(addr, length);
@@ -304,7 +303,7 @@ int Process::munmap(uint64_t addr, uint64_t length) {
     return ret;
 }
 
-int Process::mprotect(uint64_t addr, uint64_t length, uint32_t prot) {
+int Process::mprotect(uint64_t addr, uint64_t length, uint32_t prot) const {
     if (!m_mmap) return -1;
     m_spaceLock.acquire();
     int ret = m_mmap->protect(addr, length, prot);
@@ -428,4 +427,10 @@ int Process::mkdir(const char* path, uint32_t mode) const {
     if (resolved[0] == '\0') return -1;
 
     return VFS::mkdir(resolved);
+}
+
+int Process::fstat(int fd, InodeStat* st) const {
+    File* f = getFile(fd);
+    if (!f) return -1;
+    return f->fstat(st);
 }

@@ -25,6 +25,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_GETCWD: tf->a0 = sys_getcwd(tf); break;
     case SYS_CHDIR: tf->a0 = sys_chdir(tf); break;
     case SYS_MKDIR: tf->a0 = sys_mkdir(tf); break;
+    case SYS_FSTAT: tf->a0 = sys_fstat(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -198,4 +199,15 @@ uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
 
     int ret = PCB::runningProcess()->mkdir(path, mode);
     return (ret == 0) ? 0 : (uint64_t)-1;
+}
+
+uint64_t SyscallHandler::sys_fstat(TrapFrame* tf) {
+    int fd = (int)(int64_t)tf->a0;
+    auto st = (InodeStat*)tf->a1;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    int ret = PCB::runningProcess()->fstat(fd, st);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    return (uint64_t)ret;
 }

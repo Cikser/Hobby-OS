@@ -14,6 +14,7 @@ enum Syscall {
     SYS_WRITE = 64,
     SYS_READV = 65,
     SYS_WRITEV = 66,
+    SYS_FSTAT = 80,
     SYS_MKDIR = 83,
     SYS_EXIT = 93,
     SYS_EXIT_GROUP = 94,
@@ -48,6 +49,7 @@ private:
     static uint64_t sys_getcwd(TrapFrame* tf);
     static uint64_t sys_chdir(TrapFrame* tf);
     static uint64_t sys_mkdir(TrapFrame* tf);
+    static uint64_t sys_fstat(TrapFrame* tf);
 };
 
 #endif

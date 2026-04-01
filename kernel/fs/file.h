@@ -23,6 +23,7 @@ public:
     int seek(uint64_t offset);
     uint64_t tell() const;
     void close();
+    int fstat(InodeStat* st) const;
 
     static constexpr uint32_t O_RDONLY = 0x0;
     static constexpr uint32_t O_WRONLY = 0x1;

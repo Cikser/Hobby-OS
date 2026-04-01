@@ -9,14 +9,27 @@ struct DirEntry {
 };
 
 struct InodeStat {
-    uint64_t size;
-    uint32_t mode;
-    uint32_t uid;
-    uint32_t gid;
-    uint32_t atime;
-    uint32_t mtime;
-    uint32_t ctime;
-    uint32_t nlinks;
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint32_t st_mode;
+    uint32_t st_nlink;
+    uint32_t st_uid;
+    uint32_t st_gid;
+    uint64_t st_rdev;
+    uint64_t _pad1;
+    int64_t st_size;
+    int32_t st_blksize;
+    int32_t _pad2;
+    int64_t st_blocks;
+
+    int64_t st_atime_sec;
+    int64_t st_atime_nsec;
+    int64_t st_mtime_sec;
+    int64_t st_mtime_nsec;
+    int64_t st_ctime_sec;
+    int64_t st_ctime_nsec;
+
+    uint32_t _unused[2];
 };
 
 class VfsInode {

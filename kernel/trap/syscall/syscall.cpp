@@ -27,6 +27,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_CHDIR: tf->a0 = sys_chdir(tf); break;
     case SYS_MKDIR: tf->a0 = sys_mkdir(tf); break;
     case SYS_FSTAT: tf->a0 = sys_fstat(tf); break;
+    case SYS_EXIT_GROUP: tf->a0 = sys_exit_group(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -211,4 +212,9 @@ uint64_t SyscallHandler::sys_fstat(TrapFrame* tf) {
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
     return (uint64_t)ret;
+}
+
+uint64_t SyscallHandler::sys_exit_group(TrapFrame* tf) {
+    PCB::runningProcess()->exitGroup((int)(int64_t)tf->a0);
+    return 0;
 }

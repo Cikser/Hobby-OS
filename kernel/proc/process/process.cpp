@@ -78,6 +78,17 @@ Process* Process::createInit() {
     return proc;
 }
 
+Thread* Process::createThread(void (*entry)(void*), void* args) {
+    auto t = new Thread(this, (uint64_t)entry, args);
+
+    m_lock.acquire();
+    t->m_nextThread = m_threads;
+    m_threads = t;
+    m_lock.release();
+
+    return t;
+}
+
 Process* Process::fork() {
     m_spaceLock.acquire();
 
@@ -467,4 +478,18 @@ int Process::fstat(int fd, InodeStat* st) const {
     File* f = getFile(fd);
     if (!f) return -1;
     return f->fstat(st);
+}
+
+void Process::exitGroup(int exitCode) {
+    m_lock.acquire();
+    Thread* t = m_threads;
+    while (t) {
+        Thread* next = t->m_nextThread;
+        if (t->m_state != ProcState::ZOMBIE)
+            t->exit(0);
+        t = next;
+    }
+    m_lock.release();
+
+    exit(exitCode);
 }

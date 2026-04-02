@@ -24,7 +24,7 @@ public:
     }
 
     static Process* createInit();
-    Thread* createThread(void(*entry)(void*));
+    Thread* createThread(void(*entry)(void*), void* args = nullptr);
     void resolveRelative(const char* path, char* out) const;
 
     Process* owner() override { return this; }
@@ -45,6 +45,7 @@ public:
     int chdir(const char* path);
     int mkdir(const char* path, uint32_t mode) const;
     int fstat(int fd, InodeStat* st) const;
+    void exitGroup(int exitCode = 0);
 
 private:
     friend class Thread;

@@ -218,3 +218,53 @@ uint64_t SyscallHandler::sys_exit_group(TrapFrame* tf) {
     PCB::runningProcess()->exitGroup((int)(int64_t)tf->a0);
     return 0;
 }
+
+struct iovec {
+    void* iov_base;
+    uint64_t iov_len;
+};
+
+uint64_t SyscallHandler::sys_writev(TrapFrame* tf) {
+    int fd = (int)(int64_t)tf->a0;
+    auto* iov = (iovec*)tf->a1;
+    int iovcnt = (int)(int64_t)tf->a2;
+
+    File* file = PCB::runningProcess()->getFile(fd);
+    if (!file) return -1;
+
+    uint64_t total = 0;
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    for (int i = 0; i < iovcnt; i++) {
+        if (!iov[i].iov_base || iov[i].iov_len == 0) continue;
+        uint64_t written = file->write(iov[i].iov_base, iov[i].iov_len);
+        if ((int64_t)written < 0) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM); return -1;
+        }
+        total += written;
+    }
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    return total;
+}
+
+uint64_t SyscallHandler::sys_readv(TrapFrame* tf) {
+    int fd = (int)(int64_t)tf->a0;
+    auto* iov = (iovec*)tf->a1;
+    int iovcnt = (int)(int64_t)tf->a2;
+
+    File* file = PCB::runningProcess()->getFile(fd);
+    if (!file) return -1;
+
+    uint64_t total = 0;
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    for (int i = 0; i < iovcnt; i++) {
+        if (!iov[i].iov_base || iov[i].iov_len == 0) continue;
+        uint64_t read = file->read(iov[i].iov_base, iov[i].iov_len);
+        if ((int64_t)read < 0) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM); return -1;
+        }
+        total += read;
+        if (read < iov[i].iov_len) break;
+    }
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    return total;
+}

@@ -51,6 +51,8 @@ private:
     static uint64_t sys_mkdir(TrapFrame* tf);
     static uint64_t sys_fstat(TrapFrame* tf);
     static uint64_t sys_exit_group(TrapFrame* tf);
+    static uint64_t sys_writev(TrapFrame* tf);
+    static uint64_t sys_readv(TrapFrame* tf);
 };
 
 #endif

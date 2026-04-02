@@ -195,7 +195,10 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
     }
 
     if (newHeapEnd > heapEnd) {
-        uint32_t pageNum = (newHeapEnd - heapEnd) / MemoryLayout::PAGE_SIZE;
+        uint64_t alignedNew = MemoryLayout::pageRoundUp(newHeapEnd);
+        uint64_t alignedOld = MemoryLayout::pageRoundUp(heapEnd);
+        uint32_t pageNum = (alignedNew - alignedOld) / MemoryLayout::PAGE_SIZE;
+
         for (uint32_t i = 0; i < pageNum; i++) {
             auto page = (uint64_t)MemoryAllocator::kallocPage();
             if (page == 0) {
@@ -203,8 +206,10 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
                 return -1;
             }
             uint64_t pagePa = MemoryLayout::v2p(page);
-            if (m_pmt->mapPage(heapEnd, pagePa, PMT::PAGE_USER))
-                heapEnd += MemoryLayout::PAGE_SIZE;
+            if (m_pmt->mapPage(alignedOld + i * MemoryLayout::PAGE_SIZE,
+                               pagePa, PMT::PAGE_USER)) {
+                heapEnd = alignedOld + (i + 1) * MemoryLayout::PAGE_SIZE;
+            }
             else {
                 m_spaceLock.release();
                 return -1;
@@ -212,12 +217,16 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
         }
     }
     else {
-        uint32_t pageNum = (heapEnd - newHeapEnd) / MemoryLayout::PAGE_SIZE;
+        uint64_t alignedNew = MemoryLayout::pageRoundUp(newHeapEnd);
+        uint64_t alignedOld = MemoryLayout::pageRoundUp(heapEnd);
+        uint32_t pageNum = (alignedOld - alignedNew) / MemoryLayout::PAGE_SIZE;
+
         for (uint32_t i = 0; i < pageNum; i++) {
-            uint64_t pagePa = m_pmt->translate(heapEnd - MemoryLayout::PAGE_SIZE);
-            if (m_pmt->unmapPage(heapEnd - MemoryLayout::PAGE_SIZE)) {
+            uint64_t va = alignedOld - (i + 1) * MemoryLayout::PAGE_SIZE;
+            uint64_t pagePa = m_pmt->translate(va);
+            if (m_pmt->unmapPage(va)) {
                 MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pagePa));
-                heapEnd -= MemoryLayout::PAGE_SIZE;
+                heapEnd = va;
             }
             else {
                 m_spaceLock.release();

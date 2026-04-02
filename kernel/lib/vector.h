@@ -85,7 +85,7 @@ public:
     }
 
     CONST_REFERENCE_TYPE at(uint64_t index) const {
-        if (index >= m_size) {
+        if (index >= m_capacity) {
             Console::panic("Vector::at(): index out of bounds");
         }
         return m_data[index];

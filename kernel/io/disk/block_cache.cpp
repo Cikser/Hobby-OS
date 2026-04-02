@@ -21,7 +21,7 @@ void* BlockCache::insert(uint64_t sectorNum, const void* data) {
     s_lock.acquire();
 
     if (!s_map)
-        s_map = new HashMap<uint64_t, CachedBlock*>();
+        s_map = new HashMap<uint64_t, CachedBlock*>(256);
 
     if (s_map->contains(sectorNum)) {
         CachedBlock* cb = s_map->at(sectorNum);

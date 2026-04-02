@@ -265,6 +265,11 @@ int Process::closeFile(int fd) {
 
 void Process::exit(int exitCode) {
     m_exitCode = exitCode;
+    if (m_tidAddress) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *(int*)m_tidAddress = 0;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
     while (m_waitSem.waiting()) {
         m_waitSem.signal();
     }

@@ -18,6 +18,7 @@ enum Syscall {
     SYS_MKDIR = 83,
     SYS_EXIT = 93,
     SYS_EXIT_GROUP = 94,
+    SYS_SET_TID_ADDRESS = 96,
     SYS_CLOCK_GETTIME = 113,
     SYS_GETPID = 172,
     SYS_BRK = 214,
@@ -55,6 +56,7 @@ private:
     static uint64_t sys_writev(TrapFrame* tf);
     static uint64_t sys_readv(TrapFrame* tf);
     static uint64_t sys_clock_gettime(TrapFrame* tf);
+    static uint64_t sys_set_tid_address(TrapFrame* tf);
 };
 
 #endif

@@ -52,6 +52,8 @@ public:
     static pid_t currentPid() { return s_running->pid(); }
     static PCB* running() { return s_running; }
     static Process* runningProcess() { return s_running->owner();}
+    void setTidAddress(uint64_t addr) { m_tidAddress = addr; }
+    uint64_t tidAddress() const { return m_tidAddress; }
 
     virtual Process* owner() = 0;
     virtual void exit(int exitCode = 0) = 0;
@@ -86,6 +88,7 @@ protected:
     uint64_t m_entry;
     void* m_args;
     Semaphore m_waitSem;
+    uint64_t m_tidAddress;
     mutable Lock m_lock;
 
     static pid_t s_pid;

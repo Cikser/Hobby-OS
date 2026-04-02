@@ -1,4 +1,6 @@
 #include "thread.h"
+
+#include "riscv.h"
 #include "../../mm/vm/vm.h"
 
 KMemCache<Thread>* Thread::s_cache = nullptr;
@@ -51,6 +53,11 @@ Thread::~Thread() {
 }
 
 void Thread::exit(int exitCode) {
+    if (m_tidAddress) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *(int*)m_tidAddress = 0;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
     while (m_waitSem.waiting()) {
         m_waitSem.signal();
     }

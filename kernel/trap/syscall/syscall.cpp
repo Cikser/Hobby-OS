@@ -288,3 +288,9 @@ uint64_t SyscallHandler::sys_clock_gettime(TrapFrame* tf) {
 
     return 0;
 }
+
+uint64_t SyscallHandler::sys_set_tid_address(TrapFrame* tf) {
+    uint64_t tidptr = tf->a0;
+    PCB::running()->setTidAddress(tidptr);
+    return PCB::running()->pid();
+}

@@ -21,6 +21,7 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_entry(entry),
     m_args(nullptr),
     m_waitSem(Semaphore(0)),
+    m_tidAddress(0),
     m_lock(Lock())
 {
     s_pidLock.acquire();

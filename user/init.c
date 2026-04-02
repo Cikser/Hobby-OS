@@ -115,11 +115,11 @@ void test_mmap() {
     void* addr = mmap(0, length, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     if ((int64_t)addr < 0 || addr == 0) {
-        printf("FAILED: mmap returned %llx\n", (unsigned long long)addr);
+        printf("FAILED: mmap returned %x\n", (unsigned long)addr);
         return;
     }
 
-    printf("MMAP: Allocated 16KB at 0x%llx\n", (unsigned long long)addr);
+    printf("MMAP: Allocated 16KB at 0x%x\n", (unsigned long)addr);
 
     char* str = (char*)addr;
     const char* msg = "mmap testing string";
@@ -136,7 +136,7 @@ void test_mmap() {
     }
 
     if (munmap(addr, length) == 0) {
-        printf("MUNMAP: Freed 16KB at 0x%llx\n", (unsigned long long)addr);
+        printf("MUNMAP: Freed 16KB at 0x%x\n", (unsigned long)addr);
     } else {
         printf("FAILED: munmap\n");
     }

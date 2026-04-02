@@ -344,7 +344,7 @@ int Mmap::fillFromFile(uint64_t vaStart, uint64_t pages,
 
         uint64_t toRead = (remaining < PAGE_SIZE) ? remaining : PAGE_SIZE;
 
-        int n = file->seek(offset + i * PAGE_SIZE);
+        int n = file->seek(offset + i * PAGE_SIZE, File::SEEK_SET);
         if (n < 0) return -1;
 
         n = file->read(kva, toRead);

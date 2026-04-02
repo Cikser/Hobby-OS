@@ -40,7 +40,7 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
     }
     for (uint16_t i = 0; i < header.e_phnum; i++) {
         Elf64ProgramHeader programHeader;
-        file->seek(header.e_phoff + i * sizeof(Elf64ProgramHeader));
+        file->seek(header.e_phoff + i * sizeof(Elf64ProgramHeader), File::SEEK_SET);
         file->read(&programHeader, sizeof(programHeader));
 
         if (programHeader.p_type != PT_LOAD) continue;
@@ -53,7 +53,7 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
             return 0;
         }
         memset(mem, 0, pages * MemoryLayout::PAGE_SIZE);
-        file->seek(programHeader.p_offset);
+        file->seek(programHeader.p_offset, File::SEEK_SET);
         file->read(mem, programHeader.p_filesz);
         uint64_t va = MemoryLayout::pageRoundDown(programHeader.p_vaddr);
         uint64_t pa = MemoryLayout::v2p((uint64_t)mem);

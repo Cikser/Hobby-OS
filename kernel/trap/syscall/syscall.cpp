@@ -28,6 +28,15 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_MKDIR: tf->a0 = sys_mkdir(tf); break;
     case SYS_FSTAT: tf->a0 = sys_fstat(tf); break;
     case SYS_EXIT_GROUP: tf->a0 = sys_exit_group(tf); break;
+    case SYS_CLOCK_GETTIME: tf->a0 = sys_clock_gettime(tf); break;
+    case SYS_WRITEV: tf->a0 = sys_writev(tf); break;
+    case SYS_READV: tf->a0 = sys_readv(tf); break;
+    case SYS_SET_TID_ADDRESS: tf->a0 = sys_set_tid_address(tf); break;
+    case SYS_UNAME: tf->a0 = sys_uname(tf); break;
+    case SYS_GETUID: tf->a0 = sys_getuid(tf); break;
+    case SYS_GETEUID: tf->a0 = sys_geteuid(tf); break;
+    case SYS_GETGID: tf->a0 = sys_getgid(tf); break;
+    case SYS_GETEGID: tf->a0 = sys_getegid(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;

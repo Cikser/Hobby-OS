@@ -294,3 +294,42 @@ uint64_t SyscallHandler::sys_set_tid_address(TrapFrame* tf) {
     PCB::running()->setTidAddress(tidptr);
     return PCB::running()->pid();
 }
+
+struct utsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+};
+
+uint64_t SyscallHandler::sys_uname(TrapFrame* tf) {
+    auto* buf = (utsname*)tf->a0;
+    if (!buf) return -1;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    strcpy(buf->sysname,"Kohor");
+    strcpy(buf->nodename,"kernel");
+    strcpy(buf->release,"0.0.1");
+    strcpy(buf->version,"#1");
+    strcpy(buf->machine,"riscv64");
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_getuid(TrapFrame* tf) {
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_geteuid(TrapFrame* tf) {
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_getgid(TrapFrame* tf) {
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_getegid(TrapFrame* tf) {
+    return 0;
+}

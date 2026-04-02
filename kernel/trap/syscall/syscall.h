@@ -20,7 +20,12 @@ enum Syscall {
     SYS_EXIT_GROUP = 94,
     SYS_SET_TID_ADDRESS = 96,
     SYS_CLOCK_GETTIME = 113,
+    SYS_UNAME = 160,
     SYS_GETPID = 172,
+    SYS_GETUID = 174,
+    SYS_GETEUID = 175,
+    SYS_GETGID = 176,
+    SYS_GETEGID = 177,
     SYS_BRK = 214,
     SYS_MUNMAP = 215,
     SYS_FORK = 220,
@@ -57,6 +62,11 @@ private:
     static uint64_t sys_readv(TrapFrame* tf);
     static uint64_t sys_clock_gettime(TrapFrame* tf);
     static uint64_t sys_set_tid_address(TrapFrame* tf);
+    static uint64_t sys_uname(TrapFrame* tf);
+    static uint64_t sys_getuid(TrapFrame* tf);
+    static uint64_t sys_geteuid(TrapFrame* tf);
+    static uint64_t sys_getgid(TrapFrame* tf);
+    static uint64_t sys_getegid(TrapFrame* tf);
 };
 
 #endif

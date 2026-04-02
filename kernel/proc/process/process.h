@@ -47,6 +47,11 @@ public:
     int fstat(int fd, InodeStat* st) const;
     void exitGroup(int exitCode = 0);
 
+    bool checkOperation(uint64_t addr, uint64_t len, uint32_t op) const {
+        if (addr > addr + len) return false;
+        return m_segTable->checkOperation(addr, addr + len, op);
+    };
+
 private:
     friend class Thread;
 

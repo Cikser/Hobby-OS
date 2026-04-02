@@ -64,6 +64,9 @@ uint64_t SyscallHandler::sys_write(TrapFrame* tf) {
     uint64_t buf = tf->a1;
     uint64_t len = tf->a2;
 
+    if (!PCB::runningProcess()->checkOperation(buf, len, SegmentDesc::SEG_R))
+        return -1;
+
     File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
 
@@ -78,6 +81,9 @@ uint64_t SyscallHandler::sys_read(TrapFrame* tf) {
     int fd = (int)(int64_t)tf->a0;
     uint64_t buf = tf->a1;
     uint64_t len = tf->a2;
+
+    if (!PCB::runningProcess()->checkOperation(buf, len, SegmentDesc::SEG_W))
+        return -1;
 
     File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
@@ -100,6 +106,9 @@ uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
     uint64_t flags = tf->a2;
     uint64_t mode = tf->a3;
 
+    if (!PCB::runningProcess()->checkOperation(filePath, 256, SegmentDesc::SEG_R))
+        return -1;
+
     char path[256];
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     auto src = (char*)filePath;
@@ -117,6 +126,9 @@ uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
     uint64_t pathAddr = tf->a0;
 
+    if (!PCB::runningProcess()->checkOperation(pathAddr, 256, SegmentDesc::SEG_R))
+        return -1;
+
     char path[256];
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     strcpy(path, (char*)pathAddr);
@@ -130,6 +142,9 @@ uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
     pid_t pid = tf->a0;
     uint64_t statusAddr = tf->a1;
+
+    if (statusAddr && !PCB::runningProcess()->checkOperation(statusAddr, sizeof(int), SegmentDesc::SEG_W))
+        return -1;
 
     auto proc = PCB::runningProcess();
 
@@ -176,6 +191,9 @@ uint64_t SyscallHandler::sys_getcwd(TrapFrame* tf) {
 
     if (!buf || size == 0) return (uint64_t)-1;
 
+    if (!PCB::runningProcess()->checkOperation((uint64_t)buf, size, SegmentDesc::SEG_W))
+        return -1;
+
     char kbuf[256];
     int ret = PCB::runningProcess()->getcwd(kbuf, sizeof(kbuf));
     if (ret < 0) return (uint64_t)-1;
@@ -191,6 +209,10 @@ uint64_t SyscallHandler::sys_getcwd(TrapFrame* tf) {
 }
 
 uint64_t SyscallHandler::sys_chdir(TrapFrame* tf) {
+
+    if (!PCB::runningProcess()->checkOperation(tf->a0, 256, SegmentDesc::SEG_R))
+        return -1;
+
     char path[256];
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
@@ -205,6 +227,9 @@ uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
     char path[256];
     auto mode = (uint32_t)tf->a1;
 
+    if (!PCB::runningProcess()->checkOperation(tf->a0, 256, SegmentDesc::SEG_R))
+        return -1;
+
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     strcpy(path, (char*)tf->a0);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
@@ -216,6 +241,9 @@ uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_fstat(TrapFrame* tf) {
     int fd = (int)(int64_t)tf->a0;
     auto st = (InodeStat*)tf->a1;
+
+    if (!PCB::runningProcess()->checkOperation((uint64_t)st, sizeof(InodeStat), SegmentDesc::SEG_W))
+        return -1;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     int ret = PCB::runningProcess()->fstat(fd, st);
@@ -246,6 +274,8 @@ uint64_t SyscallHandler::sys_writev(TrapFrame* tf) {
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     for (int i = 0; i < iovcnt; i++) {
         if (!iov[i].iov_base || iov[i].iov_len == 0) continue;
+        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_R))
+            return total;
         uint64_t written = file->write(iov[i].iov_base, iov[i].iov_len);
         if ((int64_t)written < 0) {
             RiscV::mc_sstatus(RiscV::SSTATUS_SUM); return -1;
@@ -268,6 +298,8 @@ uint64_t SyscallHandler::sys_readv(TrapFrame* tf) {
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     for (int i = 0; i < iovcnt; i++) {
         if (!iov[i].iov_base || iov[i].iov_len == 0) continue;
+        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_W))
+            return total;
         uint64_t read = file->read(iov[i].iov_base, iov[i].iov_len);
         if ((int64_t)read < 0) {
             RiscV::mc_sstatus(RiscV::SSTATUS_SUM); return -1;
@@ -289,10 +321,13 @@ uint64_t SyscallHandler::sys_clock_gettime(TrapFrame* tf) {
     auto* ts = (timespec*)tf->a1;
     if (!ts) return -1;
 
+    if (!PCB::runningProcess()->checkOperation((uint64_t)ts, sizeof(timespec), SegmentDesc::SEG_W))
+        return -1;
+
     uint64_t ms = TrapHandler::getTicks();
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    ts->tv_sec  = ms / 1000;
+    ts->tv_sec = ms / 1000;
     ts->tv_nsec = (ms % 1000) * 1000000LL;
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
@@ -316,6 +351,9 @@ struct utsname {
 uint64_t SyscallHandler::sys_uname(TrapFrame* tf) {
     auto* buf = (utsname*)tf->a0;
     if (!buf) return -1;
+
+    if (!PCB::runningProcess()->checkOperation((uint64_t)buf, sizeof(utsname), SegmentDesc::SEG_W))
+        return -1;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     strcpy(buf->sysname,"Kohor");

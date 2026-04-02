@@ -23,6 +23,8 @@ public:
     uint64_t unmapPages(uint64_t va, uint64_t count);
     uint64_t translate(uint64_t va);
     void activate() const;
+    void clean();
+    bool empty() const;
 
     static constexpr uint64_t PAGE_V = (1ULL << 0);
     static constexpr uint64_t PAGE_R = (1ULL << 1);

@@ -42,6 +42,8 @@ public:
 
     static SegmentTable* copy(const SegmentTable* src);
 
+    bool checkOperation(uint64_t va_start, uint64_t va_end, uint32_t op);
+
     SegmentDesc* setText(uint8_t flags, uint64_t va_start, uint64_t va_end);
     SegmentDesc* setRoData(uint8_t flags, uint64_t va_start, uint64_t va_end);
     SegmentDesc* setData(uint8_t flags, uint64_t va_start, uint64_t va_end);

@@ -89,3 +89,24 @@ void PMT::activate() const {
 
     RiscV::loadSatp(pa);
 }
+
+void PMT::clean() {
+    for (int i = 0; i < PMT_SIZE; i++) {
+        uint64_t pte = m_entries[i];
+        if (pteValid(pte) && !(pte & (PAGE_R | PAGE_W | PAGE_X))) {
+            PMT* nextLevelTable = (PMT*)pte2table(pte);
+            nextLevelTable->clean();
+            if (nextLevelTable->empty()) {
+                delete nextLevelTable;
+                m_entries[i] = 0;
+            }
+        }
+    }
+}
+
+bool PMT::empty() const {
+    for (int i = 0; i < PMT_SIZE; i++) {
+        if (m_entries[i] != 0) return false;
+    }
+    return true;
+}

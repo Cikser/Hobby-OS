@@ -184,7 +184,7 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
         return heapEnd;
     }
 
-    if (newHeapEnd > heapStart + MemoryAllocator::freePages()) {
+    if (newHeapEnd > heapEnd + MemoryAllocator::freePages() * MemoryLayout::PAGE_SIZE) {
         m_spaceLock.release();
         return -1;
     }
@@ -215,11 +215,12 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
                 heapEnd -= MemoryLayout::PAGE_SIZE;
             }
             else {
-                Console::panic("wtf");
                 m_spaceLock.release();
                 return -1;
             }
         }
+        m_pmt->clean();
+        RiscV::flushTLB();
     }
     m_segTable->heap()->end = heapEnd;
 

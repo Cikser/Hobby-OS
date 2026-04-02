@@ -149,3 +149,13 @@ void SegmentTable::mmapReverse(SegmentTable* dst, const SegmentDesc* desc) {
     mmapReverse(dst, desc->next);
     dst->addMmap(desc->flags, desc->start, desc->end);
 }
+
+bool SegmentTable::checkOperation(uint64_t va_start, uint64_t va_end, uint32_t op) {
+    while (va_start < va_end) {
+        SegmentDesc* desc = find(va_start);
+        if (!desc) return false;
+        if (!(desc->flags & op)) return false;
+        va_start = desc->end;
+    }
+    return true;
+}

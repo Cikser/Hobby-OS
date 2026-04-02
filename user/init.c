@@ -61,7 +61,7 @@ void test_basic_fs() {
     }
 }
 
-/*void test_badargs() {
+void test_badargs() {
     print_header("TEST: Bad Arguments & Bound Checks");
 
     int fd = open("/readme.txt", O_RDONLY);
@@ -84,7 +84,7 @@ void test_basic_fs() {
 
     ret = mkdir((char*)0xFFFFFFFFFFFFFFFF, 0755);
     printf("MKDIR bad ptr returned: %d\n", ret);
-}*/
+}
 
 void test_fd_limit() {
     print_header("LIMIT TEST: File Descriptor Exhaustion");
@@ -300,7 +300,7 @@ void _start() {
     }
 
     test_basic_fs();
-    //test_badargs();
+    test_badargs();
     test_fd_limit();
     test_mmap();
     test_brk_limit();

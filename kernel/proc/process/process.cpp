@@ -1,4 +1,6 @@
 #include "process.h"
+
+#include "garbage.h"
 #include "riscv.h"
 #include "../thread/thread.h"
 #include "../../io/console/uart_inode.h"
@@ -9,6 +11,7 @@
 #include "../elf/elf.h"
 
 KMemCache<Process>* Process::s_cache = nullptr;
+Process* Process::s_init = nullptr;
 
 Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
     PCB(entry, pmt),
@@ -75,6 +78,7 @@ Process* Process::createInit() {
 
     proc->m_entry = entry;
     proc->m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START, HEAP_START);
+    s_init = proc;
     return proc;
 }
 
@@ -266,6 +270,20 @@ int Process::closeFile(int fd) {
 
 void Process::exit(int exitCode) {
     m_exitCode = exitCode;
+    m_lock.acquire();
+    Process* child = m_firstChild;
+    while (child) {
+        Process* next = child->m_nextSibling;
+        child->m_parent = s_init;
+        s_init->m_lock.acquire();
+        child->m_nextSibling = Process::s_init->m_firstChild;
+        s_init->m_firstChild = child;
+        if (child->m_state == ProcState::ZOMBIE)
+            s_init->m_selfSem.signal();
+        s_init->m_lock.release();
+        child = next;
+    }
+    m_firstChild = nullptr;
     if (m_tidAddress) {
         RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         *(int*)m_tidAddress = 0;
@@ -278,8 +296,9 @@ void Process::exit(int exitCode) {
     if (m_parent) {
         m_parent->m_selfSem.signal();
     }
-
     m_state = ProcState::ZOMBIE;
+    PCBGarbage::put(this);
+    m_lock.release();
     yield();
 }
 
@@ -331,8 +350,7 @@ pid_t Process::wait(pid_t pid, int* status) {
     pid_t retPid = zombie->m_pid;
     if (status) *status = zombie->m_exitCode;
 
-    // todo garbage collection
-    //delete zombie;
+    zombie->m_reaped = true;
     return retPid;
 }
 

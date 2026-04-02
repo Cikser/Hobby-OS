@@ -28,6 +28,7 @@ public:
     void resolveRelative(const char* path, char* out) const;
 
     Process* owner() override { return this; }
+    bool isProcess() override { return true; }
     int exec(const char* elfPath);
     Process* fork();
     File* getFile(int fd) const;
@@ -54,11 +55,13 @@ public:
 
 private:
     friend class Thread;
+    friend class PCBGarbage;
 
     static constexpr uint32_t MAX_FDS = 16;
     static constexpr uint64_t HEAP_START = 0x1000000;
 
     static KMemCache<Process>* s_cache;
+    static Process* s_init;
 
     Process(PMT* pmt, uint64_t entry, Process* parent);
 
@@ -74,6 +77,7 @@ private:
     Semaphore m_selfSem;
     mutable Lock m_spaceLock;
     Mmap* m_mmap;
+    bool m_reaped = false;
 };
 
 #endif

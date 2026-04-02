@@ -1,5 +1,6 @@
 #include "thread.h"
 
+#include "garbage.h"
 #include "riscv.h"
 #include "../../mm/vm/vm.h"
 
@@ -53,6 +54,7 @@ Thread::~Thread() {
 }
 
 void Thread::exit(int exitCode) {
+    m_lock.acquire();
     if (m_tidAddress) {
         RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         *(int*)m_tidAddress = 0;
@@ -62,5 +64,7 @@ void Thread::exit(int exitCode) {
         m_waitSem.signal();
     }
     m_state = ProcState::ZOMBIE;
+    PCBGarbage::put(this);
+    m_lock.release();
     yield();
 }

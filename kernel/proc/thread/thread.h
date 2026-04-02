@@ -22,11 +22,12 @@ public:
     }
 
     Process* owner() override { return m_parent; }
-
+    bool isProcess() override { return false; }
     void exit(int exitCode) override;
 
 private:
     friend class Process;
+    friend class PCBGarbage;
 
     static KMemCache<Thread>* s_cache;
 

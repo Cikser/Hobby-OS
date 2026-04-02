@@ -56,12 +56,14 @@ public:
     uint64_t tidAddress() const { return m_tidAddress; }
 
     virtual Process* owner() = 0;
+    virtual bool isProcess() = 0;
     virtual void exit(int exitCode = 0) = 0;
 
 protected:
     friend class Scheduler;
     friend class ProcList;
     friend class TrapHandler;
+    friend class PCBGarbage;
 
     static constexpr time_t DEFAULT_TIME_SLICE = 2;
 

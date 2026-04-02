@@ -1,5 +1,6 @@
 #include "trap.h"
 
+#include "garbage.h"
 #include "scheduler.h"
 #include "../hw/riscv.h"
 #include "../io/plic.h"
@@ -38,6 +39,7 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             s_ticks++;
             RiscV::mc_sip(RiscV::SIP_SSIP);
             Scheduler::awake();
+            PCBGarbage::clear();
             PCB::s_timeSliceCounter++;
             if (PCB::s_timeSliceCounter >= PCB::running()->m_timeSlice) {
                 uint64_t sstatus = RiscV::r_sstatus();

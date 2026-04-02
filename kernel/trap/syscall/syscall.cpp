@@ -268,3 +268,23 @@ uint64_t SyscallHandler::sys_readv(TrapFrame* tf) {
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
     return total;
 }
+
+struct timespec {
+    time_t tv_sec;
+    time_t tv_nsec;
+};
+
+uint64_t SyscallHandler::sys_clock_gettime(TrapFrame* tf) {
+    auto clockid = (int32_t)tf->a0;
+    auto* ts = (timespec*)tf->a1;
+    if (!ts) return -1;
+
+    uint64_t ms = TrapHandler::getTicks();
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    ts->tv_sec  = ms / 1000;
+    ts->tv_nsec = (ms % 1000) * 1000000LL;
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    return 0;
+}

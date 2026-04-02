@@ -9,8 +9,12 @@ public:
     static void trap();
     static void timerTrap();
 
+    static time_t getTicks() { return s_ticks; };
+
 private:
     static void handleTrap(TrapFrame* trapFrame);
+
+    static time_t s_ticks;
 
     static constexpr uint64_t SYSCALL = 0x8;
     static constexpr uint64_t PF_INSTRUCTION = 0x12;

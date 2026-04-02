@@ -1,15 +1,10 @@
 #ifndef RISC_V_PCB_H
 #define RISC_V_PCB_H
 
-#include "file.h"
 #include "../types.h"
 #include "../trap/trapframe.h"
 #include "../mm/vm/pmt.h"
-#include "../mm/vm/segment.h"
 #include "../sync/sem.h"
-
-typedef uint64_t pid_t;
-typedef uint64_t time_t;
 
 enum class ProcState {
     READY,

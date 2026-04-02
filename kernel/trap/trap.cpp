@@ -10,6 +10,8 @@
 
 extern "C" void _trap_kernel_entry();
 
+time_t TrapHandler::s_ticks = 0;
+
 void TrapHandler::init() {
     RiscV::w_stvec((uint64_t)&_trap_kernel_entry);
 
@@ -33,6 +35,7 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             break;
         }
         case TIMER_INTERRUPT: {
+            s_ticks++;
             RiscV::mc_sip(RiscV::SIP_SSIP);
             Scheduler::awake();
             PCB::s_timeSliceCounter++;

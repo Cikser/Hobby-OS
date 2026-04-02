@@ -12,5 +12,7 @@ typedef signed int int32_t;
 typedef signed long int int64_t;
 
 typedef uint64_t size_t;
+typedef uint64_t pid_t;
+typedef uint64_t time_t;
 
 #endif

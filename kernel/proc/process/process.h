@@ -10,8 +10,7 @@ class Thread;
 
 class Process : public PCB {
 public:
-    ~Process() override;
-
+    ~Process() override = default;
     void* operator new(size_t size) {
         if (!s_cache) {
             s_cache = new KMemCache<Process>();
@@ -29,6 +28,7 @@ public:
 
     Process* owner() override { return this; }
     bool isProcess() override { return true; }
+    void clear() override;
     int exec(const char* elfPath);
     Process* fork();
     File* getFile(int fd) const;

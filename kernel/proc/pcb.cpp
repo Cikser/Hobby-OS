@@ -113,7 +113,7 @@ void PCB::dispatch() {
     switchContext(&current->m_context, &next->m_context);
 }
 
-PCB::~PCB() {
+void PCB::clear() {
     if (m_kstack)
         MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
 }

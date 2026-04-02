@@ -38,7 +38,7 @@ Thread::Thread(void (*entry)(void*), void* args) :
     m_args = args;
 }
 
-Thread::~Thread() {
+void Thread::clear() {
     if (m_pmt) {
         if (m_parent) m_parent->m_spaceLock.acquire();
 
@@ -51,6 +51,7 @@ Thread::~Thread() {
     }
     if (m_ustack)
         MemoryAllocator::kfreePages(m_ustack,USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    PCB::clear();
 }
 
 void Thread::exit(int exitCode) {
@@ -64,6 +65,7 @@ void Thread::exit(int exitCode) {
         m_waitSem.signal();
     }
     m_state = ProcState::ZOMBIE;
+    clear();
     PCBGarbage::put(this);
     m_lock.release();
     yield();

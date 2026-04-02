@@ -35,11 +35,11 @@ class Process;
 
 class PCB {
 public:
+    virtual ~PCB() = default;
+
     static constexpr uint32_t KERNEL_STACK_SIZE = 4096 * 4;
     static constexpr uint32_t USER_STACK_SIZE = 4096 * 4;
     static constexpr uint64_t USER_STACK_TOP = 0x0000003FFFFFF000ULL;
-
-    virtual ~PCB();
 
     static void yield();
     static void dispatch();
@@ -58,6 +58,7 @@ public:
     virtual Process* owner() = 0;
     virtual bool isProcess() = 0;
     virtual void exit(int exitCode = 0) = 0;
+    virtual void clear();
 
 protected:
     friend class Scheduler;

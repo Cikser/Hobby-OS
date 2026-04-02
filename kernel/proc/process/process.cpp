@@ -51,7 +51,7 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
     }
 }
 
-Process::~Process() {
+void Process::clear() {
     Thread* t = m_threads;
     while (t) {
         Thread* next = t->m_nextThread;
@@ -66,6 +66,7 @@ Process::~Process() {
     delete m_mmap;
     delete m_segTable;
     VM::destroyPMT(m_pmt);
+    PCB::clear();
 }
 
 Process* Process::createInit() {
@@ -297,6 +298,7 @@ void Process::exit(int exitCode) {
         m_parent->m_selfSem.signal();
     }
     m_state = ProcState::ZOMBIE;
+    clear();
     PCBGarbage::put(this);
     m_lock.release();
     yield();

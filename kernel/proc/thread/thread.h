@@ -6,7 +6,7 @@
 
 class Thread : public PCB {
 public:
-    ~Thread() override;
+    ~Thread() override = default;
     Thread(Process* parent, uint64_t entry, void* args = nullptr);
     explicit Thread(void (*entry)(void*), void* args = nullptr);
 
@@ -24,6 +24,7 @@ public:
     Process* owner() override { return m_parent; }
     bool isProcess() override { return false; }
     void exit(int exitCode) override;
+    void clear() override;
 
 private:
     friend class Process;

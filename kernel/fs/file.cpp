@@ -44,12 +44,27 @@ int File::write(const void* buf, uint64_t len) {
     return n;
 }
 
-int File::seek(uint64_t offset) {
+int64_t File::seek(int64_t offset, uint32_t whence) {
     if (!m_inode) return -1;
-    if (offset > m_inode->size()) return -1;
 
-    m_offset = offset;
-    return 0;
+    int64_t newOffset;
+    switch (whence) {
+    case SEEK_SET:
+        newOffset = offset;
+        break;
+    case SEEK_CUR:
+        newOffset = (int64_t)m_offset + offset;
+        break;
+    case SEEK_END:
+        newOffset = (int64_t)m_inode->size() + offset;
+        break;
+    default:
+        return -1;
+    }
+
+    if (newOffset < 0) return -1;
+    m_offset = (uint64_t)newOffset;
+    return newOffset;
 }
 
 uint64_t File::tell() const {

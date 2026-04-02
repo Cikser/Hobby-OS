@@ -20,7 +20,7 @@ public:
 
     int read(void* buf, uint64_t len);
     int write(const void* buf, uint64_t len);
-    int seek(uint64_t offset);
+    int64_t seek(int64_t offset, uint32_t whence);
     uint64_t tell() const;
     void close();
     int fstat(InodeStat* st) const;
@@ -31,6 +31,10 @@ public:
     static constexpr uint32_t O_CREAT = 0x40;
     static constexpr uint32_t O_TRUNC = 0x200;
     static constexpr uint32_t O_APPEND = 0x400;
+
+    static constexpr uint32_t SEEK_SET = 0x0;
+    static constexpr uint32_t SEEK_CUR = 0x1;
+    static constexpr uint32_t SEEK_END = 0x2;
 
 private:
     static KMemCache<File>* s_cache;

@@ -10,6 +10,7 @@ enum Syscall {
     SYS_CHDIR = 49,
     SYS_OPENAT = 56,
     SYS_CLOSE = 57,
+    SYS_LSEEK = 62,
     SYS_READ = 63,
     SYS_WRITE = 64,
     SYS_READV = 65,
@@ -67,6 +68,7 @@ private:
     static uint64_t sys_geteuid(TrapFrame* tf);
     static uint64_t sys_getgid(TrapFrame* tf);
     static uint64_t sys_getegid(TrapFrame* tf);
+    static uint64_t sys_lseek(TrapFrame* tf);
 };
 
 #endif

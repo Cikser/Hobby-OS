@@ -1,5 +1,4 @@
 #include "process.h"
-
 #include "riscv.h"
 #include "../thread/thread.h"
 #include "../../io/console/uart_inode.h"
@@ -83,6 +82,8 @@ Process* Process::fork() {
     m_spaceLock.acquire();
 
     PMT* pmt = VM::createPMT();
+    if (!pmt) return nullptr;
+
     VM::copyPMT(pmt, m_pmt);
     auto child = new Process(pmt, -1, this);
 
@@ -172,6 +173,11 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
         return heapEnd;
     }
 
+    if (newHeapEnd > heapStart + MemoryAllocator::freePages()) {
+        m_spaceLock.release();
+        return -1;
+    }
+
     if (newHeapEnd > heapEnd) {
         uint32_t pageNum = (newHeapEnd - heapEnd) / MemoryLayout::PAGE_SIZE;
         for (uint32_t i = 0; i < pageNum; i++) {
@@ -198,6 +204,7 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
                 heapEnd -= MemoryLayout::PAGE_SIZE;
             }
             else {
+                Console::panic("wtf");
                 m_spaceLock.release();
                 return -1;
             }

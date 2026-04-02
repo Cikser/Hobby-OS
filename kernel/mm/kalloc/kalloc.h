@@ -1,6 +1,7 @@
 #ifndef RISC_V_KALLOC_H
 #define RISC_V_KALLOC_H
 
+#include "buddy.h"
 #include "kmem_cache.h"
 #include "../../types.h"
 
@@ -16,6 +17,8 @@ public:
 
     static void* kmalloc(size_t size);
     static void kfree(void* ptr);
+
+    static uint64_t freePages() { return Buddy::m_freeSpace / MemoryLayout::PAGE_SIZE; }
 
 private:
     static constexpr uint32_t SMB_START_POW = 5;

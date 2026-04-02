@@ -45,7 +45,7 @@ uint64_t SyscallHandler::sys_exit(TrapFrame* tf) {
 
 uint64_t SyscallHandler::sys_fork(TrapFrame* tf) {
     PCB* child = PCB::runningProcess()->fork();
-    return child->pid();
+    return child ? child->pid() : -1;
 }
 
 uint64_t SyscallHandler::sys_write(TrapFrame* tf) {

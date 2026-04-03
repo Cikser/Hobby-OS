@@ -862,8 +862,6 @@ static void test_exit_codes(void) {
 /*  23. execve                                                          */
 /* ------------------------------------------------------------------ */
 
-//todo check
-/*
 static void test_execve(void) {
     section("23. execve");
 
@@ -895,7 +893,7 @@ static void test_execve(void) {
     }
     waitpid(child, &st);
     check(st == 124, "execve NULL path fails");
-}*/
+}
 
 /* ------------------------------------------------------------------ */
 /*  24. fork bomb limit                                                 */
@@ -1676,7 +1674,7 @@ void _start() {
     test_fork_chain();
     test_wait_no_children();
     test_exit_codes();
-    //test_execve();
+    test_execve();
     test_fork_bomb();
     //test_fork_mmap_shared();
     test_fork_tree();

@@ -143,6 +143,12 @@ File* Process::getFile(int fd) const {
 
 int Process::exec(const char* elfPath) {
     m_spaceLock.acquire();
+    File* elf = VFS::open(elfPath, File::O_RDONLY);
+    if (!elf) {
+        m_spaceLock.release();
+        return -1;
+    }
+    elf->close();
     m_ustack = (uint8_t*)MemoryAllocator::kallocPages(USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
     if (!m_ustack) {
         m_spaceLock.release();

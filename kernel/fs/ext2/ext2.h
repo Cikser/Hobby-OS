@@ -75,6 +75,7 @@ private:
     Ext2SuperBlock m_sb;
     uint32_t m_blockSize;
     uint32_t m_groupCount;
+    mutable Semaphore m_inodeMutex;
 };
 
 #endif

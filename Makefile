@@ -93,7 +93,7 @@ $(BUILD_DIR)/%.S.o: $(KERNEL_DIR)/%.S
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET) $(DISASM_FILE) $(DISK_IMG)
+	rm -rf $(BUILD_DIR) $(TARGET) $(DISASM_FILE) $(DISK_IMG) user/init.o user/init.elf
 
 qemu: $(TARGET) $(DISK_IMG) disasm
 	$(QEMU_BASE) $(QEMU_DISK)

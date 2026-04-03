@@ -16,7 +16,7 @@ struct BlockBuf {
     uint8_t* buf;
 };
 
-Ext2Mount::Ext2Mount() {
+Ext2Mount::Ext2Mount() : m_inodeMutex(Semaphore(1)){
     Disk::read(2, &m_sb);
     Disk::read(3, (uint8_t*)&m_sb + Disk::SECTOR_SIZE);
     if (m_sb.s_magic != EXT2_MAGIC) {
@@ -617,6 +617,7 @@ int Ext2Inode::read(uint64_t offset, void* buf, uint64_t len) {
     if (offset + len > m_raw.i_size)
         len = m_raw.i_size - offset;
 
+    m_mount->m_inodeMutex.wait();
     uint32_t blockSize = m_mount->blockSize();
     auto dst = (uint8_t*)buf;
     uint64_t remaining = len;
@@ -641,7 +642,7 @@ int Ext2Inode::read(uint64_t offset, void* buf, uint64_t len) {
         remaining -= canRead;
         pos += canRead;
     }
-
+    m_mount->m_inodeMutex.signal();
     return (int)len;
 }
 
@@ -683,6 +684,7 @@ int Ext2Inode::readdir(uint32_t index, DirEntry* dir) {
 
 int Ext2Inode::write(uint64_t offset, const void* buf, uint64_t len) {
     if (!buf || len == 0) return -1;
+    m_mount->m_inodeMutex.wait();
 
     uint32_t blockSize = m_mount->blockSize();
     auto src = (uint8_t*)buf;
@@ -697,8 +699,10 @@ int Ext2Inode::write(uint64_t offset, const void* buf, uint64_t len) {
         if (canWrite > remaining) canWrite = remaining;
 
         uint32_t physical = blockMapAlloc(logical);
-        if (!physical) return -1;
-
+        if (!physical) {
+            m_mount->m_inodeMutex.signal();
+            return -1;
+        }
         if (blockOff != 0 || canWrite != blockSize) {
             m_mount->readBlock(physical, blockBuf.buf);
         }
@@ -714,5 +718,6 @@ int Ext2Inode::write(uint64_t offset, const void* buf, uint64_t len) {
         m_raw.i_size = len + offset;
         m_mount->writeRawInode(m_num, m_raw);
     }
+    m_mount->m_inodeMutex.signal();
     return (int)len;
 }

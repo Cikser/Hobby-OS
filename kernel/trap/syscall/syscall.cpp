@@ -270,12 +270,21 @@ uint64_t SyscallHandler::sys_writev(TrapFrame* tf) {
     File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
 
+    if (!PCB::runningProcess()->checkOperation((uint64_t)iov, (uint64_t)iovcnt * sizeof(iovec), SegmentDesc::SEG_R))
+        return -1;
+
     uint64_t total = 0;
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     for (int i = 0; i < iovcnt; i++) {
-        if (!iov[i].iov_base || iov[i].iov_len == 0) continue;
-        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_R))
-            return total;
+        if (iov[i].iov_len == 0) continue;
+        if (!iov[i].iov_base) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return -1;
+        }
+        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_R)) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return total ? total : -1;
+        }
         uint64_t written = file->write(iov[i].iov_base, iov[i].iov_len);
         if ((int64_t)written < 0) {
             RiscV::mc_sstatus(RiscV::SSTATUS_SUM); return -1;
@@ -294,12 +303,21 @@ uint64_t SyscallHandler::sys_readv(TrapFrame* tf) {
     File* file = PCB::runningProcess()->getFile(fd);
     if (!file) return -1;
 
+    if (!PCB::runningProcess()->checkOperation((uint64_t)iov, (uint64_t)iovcnt * sizeof(iovec), SegmentDesc::SEG_R))
+        return -1;
+
     uint64_t total = 0;
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     for (int i = 0; i < iovcnt; i++) {
-        if (!iov[i].iov_base || iov[i].iov_len == 0) continue;
-        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_W))
-            return total;
+        if (iov[i].iov_len == 0) continue;
+        if (!iov[i].iov_base) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return -1;
+        }
+        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_R)) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return total ? total : -1;
+        }
         uint64_t read = file->read(iov[i].iov_base, iov[i].iov_len);
         if ((int64_t)read < 0) {
             RiscV::mc_sstatus(RiscV::SSTATUS_SUM); return -1;

@@ -1270,7 +1270,7 @@ static void test_many_files(void) {
 
     mkdir("/many", 0755);
     int created = 0;
-    char path[64];
+    char path[256];
 
     for (int i = 0; i < 64; i++) {
         path[0] = '/'; path[1] = 'm'; path[2] = 'a'; path[3] = 'n';

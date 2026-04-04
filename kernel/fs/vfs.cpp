@@ -116,7 +116,7 @@ int VFS::create(const char* path) {
     return 0;
 }
 
-int VFS::unlink(const char* path) {
+int VFS::unlink(const char* path, uint32_t flags) {
     if (!m_mount) return -1;
 
     const char* name = nullptr;
@@ -135,6 +135,11 @@ int VFS::unlink(const char* path) {
     uint32_t targetNum = 0;
     if (target) {
         targetNum = target->inodeNum();
+        //todo change magic number
+        if (target->isDir() && !(flags & 0x200)) {
+            putInode(target, targetNum);
+            return -1;
+        }
         putInode(target, targetNum);
     }
 

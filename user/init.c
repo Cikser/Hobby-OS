@@ -389,6 +389,9 @@ static void test_fs_dirs(void) {
 
     r = mkdir((const char*)0, 0755);
     check(r < 0, "mkdir(NULL) fails");
+
+    rmdir("/test_dir_a/subdir_rel");
+    rmdir("/test_dir_a");
 }
 
 /* ------------------------------------------------------------------ */
@@ -462,6 +465,7 @@ static void test_file_rw(void) {
         r = read(fd, buf, 32);
         check(r == 6 && memcmp(buf, "aaabbb", 6) == 0, "O_APPEND data correct");
         close(fd);
+        unlink("/rwtest_append.txt");
     }
 
     fd = open("/large_rw.txt", O_RDWR | O_CREAT | O_TRUNC);
@@ -1254,6 +1258,11 @@ static void test_deep_path(void) {
         check(n == 4 && memcmp(buf, "deep", 4) == 0, "content correct");
         close(fd);
     }
+    rmdir("/deep/a/b/c/d");
+    rmdir("/deep/a/b/c");
+    rmdir("/deep/a/b");
+    rmdir("/deep/a");
+    rmdir("/deep");
 
     chdir("/");
 }

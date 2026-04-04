@@ -1,4 +1,6 @@
 #include "syscall.h"
+
+#include "vfs.h"
 #include "../../io/console/console.h"
 #include "../../proc/pcb.h"
 #include "../../fs/file.h"
@@ -38,6 +40,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_GETGID: tf->a0 = sys_getgid(tf); break;
     case SYS_GETEGID: tf->a0 = sys_getegid(tf); break;
     case SYS_LSEEK: tf->a0 = sys_lseek(tf); break;
+    case SYS_UNLINKAT: tf->a0 = sys_unlinkat(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -410,4 +413,21 @@ uint64_t SyscallHandler::sys_lseek(TrapFrame* tf) {
 
     int64_t ret = file->seek(off, whence);
     return (uint64_t)ret;
+}
+
+uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
+    int dirfd = (int)(int64_t)tf->a0;
+    uint64_t buf = tf->a1;
+    uint32_t flags = tf->a2;
+
+    if (!PCB::runningProcess()->checkOperation(buf, 256, SegmentDesc::SEG_R))
+        return -1;
+
+    char path[256];
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    strcpy(path, (char*)buf);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    int ret = VFS::unlink(path, flags);
+    return ret;
 }

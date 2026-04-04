@@ -7,6 +7,7 @@
 enum Syscall {
     SYS_GETCWD = 17,
     SYS_IOCTL = 29,
+    SYS_UNLINKAT = 35,
     SYS_CHDIR = 49,
     SYS_OPENAT = 56,
     SYS_CLOSE = 57,
@@ -69,6 +70,7 @@ private:
     static uint64_t sys_getgid(TrapFrame* tf);
     static uint64_t sys_getegid(TrapFrame* tf);
     static uint64_t sys_lseek(TrapFrame* tf);
+    static uint64_t sys_unlinkat(TrapFrame* tf);
 };
 
 #endif

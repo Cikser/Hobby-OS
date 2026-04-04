@@ -11,7 +11,7 @@ public:
     static File* open(const char* path, uint32_t flags);
     static int mkdir(const char* path);
     static int create(const char* path);
-    static int unlink(const char* path);
+    static int unlink(const char* path, uint32_t flags);
 
 private:
     friend class Process;

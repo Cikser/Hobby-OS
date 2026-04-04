@@ -15,6 +15,7 @@ typedef void*              mmap_ptr_t;
 
 #define SYS_GETCWD          17
 #define SYS_IOCTL           29
+#define SYS_UNLINKAT        35
 #define SYS_CHDIR           49
 #define SYS_OPENAT          56
 #define SYS_CLOSE           57
@@ -75,6 +76,7 @@ typedef void*              mmap_ptr_t;
 #define CLOCK_MONOTONIC 1
 
 #define AT_FDCWD -100
+#define AT_REMOVEDIR 0x200
 
 #define WIFEXITED(s)   (((s) & 0x7f) == 0)
 #define WEXITSTATUS(s) (((s) >> 8) & 0xff)
@@ -197,6 +199,14 @@ static inline int open(const char* path, int flags) {
 
 static inline int openat(int dirfd, const char* path, int flags, int mode) {
     return (int)_SC4(SYS_OPENAT, dirfd, path, flags, mode);
+}
+
+static inline int unlink(const char* path) {
+    return (int)_SC3(SYS_UNLINKAT, AT_FDCWD, path, 0);
+}
+
+static inline int rmdir(const char* path) {
+    return (int)_SC3(SYS_UNLINKAT, AT_FDCWD, path, AT_REMOVEDIR);
 }
 
 static inline int creat(const char* path) {

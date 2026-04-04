@@ -100,7 +100,8 @@ Process* Process::fork() {
     PMT* pmt = VM::createPMT();
     if (!pmt) return nullptr;
 
-    VM::copyPMT(pmt, m_pmt);
+    if (!VM::copyPMT(pmt, m_pmt, m_mmap)) return nullptr;
+
     auto child = new Process(pmt, -1, this);
 
     MemoryAllocator::kfreePages(child->m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);

@@ -1,6 +1,7 @@
 #ifndef RISC_V_VM_H
 #define RISC_V_VM_H
 
+#include "mmap.h"
 #include "pmt.h"
 #include "../../types.h"
 
@@ -11,7 +12,7 @@ public:
     static PMT* createPMT();
     static void destroyPMT(const PMT* pmt);
 
-    static bool copyPMT(PMT* dst, PMT* src);
+    static bool copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap = nullptr);
     static void clearUserPages(PMT* pmt);
 
 private:

@@ -760,8 +760,8 @@ static void test_fork_memory(void) {
         check(ok, "parent heap unmodified after child overwrote its copy");
         free(heap);
     }
-    // todo check
-    /*void* mp = mmap((void*)0, 4096, PROT_READ | PROT_WRITE,
+
+    void* mp = mmap((void*)0, 4096, PROT_READ | PROT_WRITE,
                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mp != MAP_FAILED) {
         ((char*)mp)[0] = 0x11;
@@ -775,7 +775,7 @@ static void test_fork_memory(void) {
         check(st == 0x22, "child saw its own mmap write");
         check(((unsigned char*)mp)[0] == 0x11, "parent mmap unaffected by child");
         munmap(mp, 4096);
-    }*/
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -925,8 +925,7 @@ static void test_fork_bomb(void) {
 /* ------------------------------------------------------------------ */
 /*  25. fork + mmap shared                                              */
 /* ------------------------------------------------------------------ */
-//todo check
-/*
+
 static void test_fork_mmap_shared(void) {
     section("25. fork + MAP_SHARED");
 
@@ -952,7 +951,7 @@ static void test_fork_mmap_shared(void) {
     check(((unsigned char*)p)[0] == 0x02, "parent sees child write via MAP_SHARED");
 
     munmap(p, 4096);
-}*/
+}
 
 /* ------------------------------------------------------------------ */
 /*  26. recursive fork tree (scheduler stress)                         */
@@ -1104,8 +1103,8 @@ static void test_mmap_fork_isolation(void) {
     void* parent_map = mmap((void*)0, 4096, PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     check(parent_map != MAP_FAILED, "parent mmap before fork");
-    //todo check
-    /*if (parent_map == MAP_FAILED) return;
+
+    if (parent_map == MAP_FAILED) return;
     ((char*)parent_map)[0] = 0x55;
 
     uint64_t parent_brk = (uint64_t)brk((void*)0);
@@ -1127,7 +1126,7 @@ static void test_mmap_fork_isolation(void) {
     uint64_t after_brk = (uint64_t)brk((void*)0);
     check(after_brk == parent_brk,
           "parent brk unaffected by child brk call");
-*/
+
     munmap(parent_map, 4096);
 }
 
@@ -1676,7 +1675,7 @@ void _start() {
     test_exit_codes();
     test_execve();
     test_fork_bomb();
-    //test_fork_mmap_shared();
+    test_fork_mmap_shared();
     test_fork_tree();
     test_memory_stress();
     test_mmap_stress();

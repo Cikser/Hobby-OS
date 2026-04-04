@@ -17,7 +17,17 @@ Mmap::Mmap(PMT* pmt, SegmentTable* segTable)
 Mmap::~Mmap() {
     MmapRegion* r = m_head;
     while (r) {
-        unmapPhysical(r->vaStart, r->vaEnd);
+        if (r->shared && r->sharedRef) {
+            r->sharedRef->refCount--;
+            if (r->sharedRef->refCount == 0) {
+                unmapPhysical(r->vaStart, r->vaEnd);
+                delete r->sharedRef;
+            } else {
+                unmapPhysicalShared(r->vaStart, r->vaEnd);
+            }
+        } else {
+            unmapPhysical(r->vaStart, r->vaEnd);
+        }
         MmapRegion* next = r->next;
         delete r;
         r = next;
@@ -64,6 +74,11 @@ uint64_t Mmap::map(uint64_t hint, uint64_t length,
     r->fileOffset = offset;
     r->shared = (flags & MMAP_MAP_SHARED) != 0;
     r->next = nullptr;
+    r->sharedRef = nullptr;
+    if (r->shared) {
+        r->sharedRef = new MmapSharedRef();
+        r->sharedRef->refCount = 1;
+    }
 
     insertRegion(r);
 
@@ -91,9 +106,19 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
         }
 
         uint64_t overlapStart = (r->vaStart > addr) ? r->vaStart : addr;
-        uint64_t overlapEnd   = (r->vaEnd   < end) ? r->vaEnd : end;
+        uint64_t overlapEnd = (r->vaEnd   < end) ? r->vaEnd : end;
 
-        unmapPhysical(overlapStart, overlapEnd);
+        if (r->shared && r->sharedRef) {
+            r->sharedRef->refCount--;
+            if (r->sharedRef->refCount == 0) {
+                unmapPhysical(r->vaStart, r->vaEnd);
+                delete r->sharedRef;
+            } else {
+                unmapPhysicalShared(r->vaStart, r->vaEnd);
+            }
+        } else {
+            unmapPhysical(r->vaStart, r->vaEnd);
+        }
         m_segTable->removeMmap(overlapStart);
 
         bool trimLeft = (r->vaStart < addr);
@@ -179,7 +204,7 @@ Mmap* Mmap::clone(PMT* newPmt, SegmentTable* newSegTable) const {
     if (!child) return nullptr;
 
     for (MmapRegion* r = m_head; r; r = r->next) {
-        uint64_t pages    = (r->vaEnd - r->vaStart) / PAGE_SIZE;
+        uint64_t pages = (r->vaEnd - r->vaStart) / PAGE_SIZE;
         uint64_t pteFlags = protToPte(r->prot);
 
         if (r->shared) {
@@ -188,7 +213,8 @@ Mmap* Mmap::clone(PMT* newPmt, SegmentTable* newSegTable) const {
                 uint64_t pa = m_pmt->translate(va);
                 if (pa) newPmt->mapPage(va, pa, pteFlags);
             }
-        } else {
+        }
+        else {
             for (uint64_t i = 0; i < pages; i++) {
                 uint64_t va     = r->vaStart + i * PAGE_SIZE;
                 uint64_t srcPa  = m_pmt->translate(va);
@@ -215,6 +241,8 @@ Mmap* Mmap::clone(PMT* newPmt, SegmentTable* newSegTable) const {
         nr->fileOffset = r->fileOffset;
         nr->shared = r->shared;
         nr->next = nullptr;
+        nr->sharedRef = r->sharedRef;
+        if (nr->sharedRef) nr->sharedRef->refCount++;
         child->insertRegion(nr);
 
         uint8_t segFlags = (uint8_t)(pteFlags & ~(PMT::PAGE_U | PMT::PAGE_V));
@@ -353,4 +381,10 @@ int Mmap::fillFromFile(uint64_t vaStart, uint64_t pages,
         remaining -= (uint64_t)n;
     }
     return 0;
+}
+
+void Mmap::unmapPhysicalShared(uint64_t vaStart, uint64_t vaEnd) const {
+    for (uint64_t va = vaStart; va < vaEnd; va += PAGE_SIZE) {
+        m_pmt->unmapPage(va);
+    }
 }

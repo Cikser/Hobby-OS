@@ -20,6 +20,17 @@ static constexpr uint64_t MMAP_FAILED = ~0ULL;
 static constexpr uint64_t MMAP_TOP = 0x0000003F00000000ULL;
 static constexpr uint64_t MMAP_BASE = 0x0000002000000000ULL;
 
+struct MmapSharedRef {
+    uint32_t refCount;
+    void* operator new(size_t size) {
+        if (!s_cache) s_cache = new KMemCache<MmapSharedRef>();
+        return s_cache->alloc();
+    }
+    void operator delete(void* ptr) { s_cache->free(ptr); }
+private:
+    inline static KMemCache<MmapSharedRef>* s_cache = nullptr;
+};
+
 struct MmapRegion {
     uint64_t vaStart;
     uint64_t vaEnd;
@@ -28,6 +39,7 @@ struct MmapRegion {
     int fd;
     uint64_t fileOffset;
     bool shared;
+    MmapSharedRef* sharedRef;
 
     MmapRegion* next;
 
@@ -71,6 +83,7 @@ private:
     bool isFree(uint64_t addr, uint64_t len) const;
     int fillFromFile(uint64_t vaStart, uint64_t pages,
                      int fd, uint64_t offset, uint64_t fileLen) const;
+    void unmapPhysicalShared(uint64_t vaStart, uint64_t vaEnd) const;
 
     PMT* m_pmt;
     SegmentTable* m_segTable;

@@ -72,38 +72,65 @@ void VM::destroyPMT(const PMT* pmt) {
     delete pmt;
 }
 
-bool VM::copyPMT(PMT* dst, PMT* src) {
-    for (int i = 0; i < 256; i++) {
+bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
+        for (int i = 0; i < 256; i++) {
         if (!PMT::pteValid(src->m_entries[i])) continue;
 
-        auto l1src = (PMT*)MemoryLayout::p2v(PMT::pte2pa(src->m_entries[i]));
-        auto l1dst = new PMT();
+        auto* l1src = (PMT*)PMT::pte2table(src->m_entries[i]);
+        auto* l1dst = new PMT();
         if (!l1dst) return false;
+
+        bool l1_has_entry = false;
 
         for (int j = 0; j < 512; j++) {
             if (!PMT::pteValid(l1src->m_entries[j])) continue;
 
-            auto* l0src = (PMT*)MemoryLayout::p2v(PMT::pte2pa(l1src->m_entries[j]));
+            auto* l0src = (PMT*)PMT::pte2table(l1src->m_entries[j]);
             auto* l0dst = new PMT();
             if (!l0dst) {
                 delete l1dst;
                 return false;
             }
 
+            bool l0_has_entry = false;
+
             for (int k = 0; k < 512; k++) {
                 if (!PMT::pteValid(l0src->m_entries[k])) continue;
 
+                uint64_t va = ((uint64_t)i << PMT::L2_OFFSET) |
+                              ((uint64_t)j << PMT::L1_OFFSET) |
+                              ((uint64_t)k << PMT::L0_OFFSET);
+
+                if (skipMmap && skipMmap->find(va)) continue;
+
                 void* newPage = MemoryAllocator::kallocPage();
-                if (!newPage) return false;
+                if (!newPage) {
+                    delete l0dst;
+                    delete l1dst;
+                    return false;
+                }
 
                 uint64_t srcPa = PMT::pte2pa(l0src->m_entries[k]);
                 memcpy(newPage, (void*)MemoryLayout::p2v(srcPa), MemoryLayout::PAGE_SIZE);
 
                 uint64_t flags = l0src->m_entries[k] & 0x3FF;
                 l0dst->m_entries[k] = PMT::makePte(MemoryLayout::v2p((uint64_t)newPage), flags);
+
+                l0_has_entry = true;
+            }
+
+            if (!l0_has_entry) {
+                delete l0dst;
+                continue;
             }
 
             l1dst->m_entries[j] = PMT::makePte(MemoryLayout::v2p((uint64_t)l0dst), PMT::PAGE_V);
+            l1_has_entry = true;
+        }
+
+        if (!l1_has_entry) {
+            delete l1dst;
+            continue;
         }
 
         dst->m_entries[i] = PMT::makePte(MemoryLayout::v2p((uint64_t)l1dst), PMT::PAGE_V);

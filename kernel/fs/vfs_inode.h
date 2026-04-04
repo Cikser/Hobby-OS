@@ -43,6 +43,7 @@ public:
     virtual uint64_t size() = 0;
     virtual int stat(InodeStat* out) = 0;
     virtual uint32_t inodeNum() const = 0;
+    virtual int truncate(uint64_t size) = 0;
 };
 
 class VfsMount {

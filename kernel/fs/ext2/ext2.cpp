@@ -689,6 +689,7 @@ int Ext2Inode::write(uint64_t offset, const void* buf, uint64_t len) {
     uint32_t blockSize = m_mount->blockSize();
     auto src = (uint8_t*)buf;
     uint64_t remaining = len;
+    offset = offset == (uint64_t)-1 ? size() : offset;
     uint64_t pos = offset;
     BlockBuf blockBuf;
 
@@ -720,4 +721,70 @@ int Ext2Inode::write(uint64_t offset, const void* buf, uint64_t len) {
     }
     m_mount->m_inodeMutex.signal();
     return (int)len;
+}
+
+int Ext2Inode::truncate(uint64_t size) {
+    if (size != 0) return -1;
+
+    m_mount->m_inodeMutex.wait();
+
+    uint32_t blockSize = m_mount->blockSize();
+    uint32_t ptrsPerBlock = blockSize / sizeof(uint32_t);
+
+    auto freeSingleIndirect = [&](uint32_t block) {
+        if (!block) return;
+        BlockBuf buf;
+        m_mount->readBlock(block, buf.buf);
+        auto* ptrs = (uint32_t*)buf.buf;
+        for (uint32_t i = 0; i < ptrsPerBlock; i++) {
+            if (ptrs[i]) m_mount->freeBlock(ptrs[i]);
+        }
+        m_mount->freeBlock(block);
+    };
+
+    auto freeDoubleIndirect = [&](uint32_t block) {
+        if (!block) return;
+        BlockBuf buf;
+        m_mount->readBlock(block, buf.buf);
+        auto* ptrs = (uint32_t*)buf.buf;
+        for (uint32_t i = 0; i < ptrsPerBlock; i++) {
+            if (ptrs[i]) freeSingleIndirect(ptrs[i]);
+        }
+        m_mount->freeBlock(block);
+    };
+
+    auto freeTripleIndirect = [&](uint32_t block) {
+        if (!block) return;
+        BlockBuf buf;
+        m_mount->readBlock(block, buf.buf);
+        auto* ptrs = (uint32_t*)buf.buf;
+        for (uint32_t i = 0; i < ptrsPerBlock; i++) {
+            if (ptrs[i]) freeDoubleIndirect(ptrs[i]);
+        }
+        m_mount->freeBlock(block);
+    };
+
+    for (int i = 0; i < 12; i++) {
+        if (m_raw.i_block[i]) {
+            m_mount->freeBlock(m_raw.i_block[i]);
+            m_raw.i_block[i] = 0;
+        }
+    }
+
+    freeSingleIndirect(m_raw.i_block[12]);
+    m_raw.i_block[12] = 0;
+
+    freeDoubleIndirect(m_raw.i_block[13]);
+    m_raw.i_block[13] = 0;
+
+    freeTripleIndirect(m_raw.i_block[14]);
+    m_raw.i_block[14] = 0;
+
+    m_raw.i_size = 0;
+    m_raw.i_blocks = 0;
+
+    m_mount->writeRawInode(m_num, m_raw);
+    m_mount->m_inodeMutex.signal();
+
+    return 0;
 }

@@ -29,6 +29,7 @@ public:
     uint64_t size() override;
     int stat(InodeStat* out) override;
     uint32_t inodeNum() const override { return m_num; }
+    int truncate(uint64_t size) override;
 
 private:
     friend class Ext2Mount;

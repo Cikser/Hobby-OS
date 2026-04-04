@@ -35,11 +35,7 @@ int File::write(const void* buf, uint64_t len) {
 
     if (!m_inode) return -1;
 
-    if (m_flags & O_APPEND) {
-        m_offset = m_inode->size();
-    }
-
-    int n = m_inode->write(m_offset, buf, len);
+    int n = m_inode->write(m_flags & O_APPEND ? (uint64_t)-1 : m_offset, buf, len);
     if (n > 0) m_offset += n;
     return n;
 }

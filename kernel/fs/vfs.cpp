@@ -55,6 +55,16 @@ File* VFS::open(const char* path, uint32_t flags) {
 
         return new File(cached, m_mount, flags);
     }
+    uint32_t accessMode = flags & 0x3;
+    bool canWrite = (accessMode == File::O_WRONLY || accessMode == File::O_RDWR);
+
+    if ((flags & File::O_TRUNC) && canWrite) {
+        if (inode->isDir()) {
+            putInode(inode, inode->inodeNum());
+            return nullptr;
+        }
+        inode->truncate(0);
+    }
 
     return new File(inode, m_mount, flags);
 }

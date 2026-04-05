@@ -135,12 +135,12 @@ int VFS::unlink(const char* path, uint32_t flags) {
     uint32_t targetNum = 0;
     if (target) {
         targetNum = target->inodeNum();
-        //todo change magic number
-        if (target->isDir() && !(flags & 0x200)) {
-            putInode(target, targetNum);
+        bool isDir = target->isDir();
+        putInode(target, targetNum);
+        if (isDir && !(flags & AT_REMOVEDIR)) {
+            putInode(parent, parent->inodeNum());
             return -1;
         }
-        putInode(target, targetNum);
     }
 
     int ret = m_mount->unlink(parent, name);

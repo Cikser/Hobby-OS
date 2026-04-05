@@ -13,6 +13,8 @@ public:
     static int create(const char* path);
     static int unlink(const char* path, uint32_t flags);
 
+    static constexpr uint32_t AT_REMOVEDIR = 0x200;
+
 private:
     friend class Process;
     static VfsInode* resolvePath(const char* path);

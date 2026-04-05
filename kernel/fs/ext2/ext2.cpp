@@ -416,13 +416,60 @@ int Ext2Mount::unlink(VfsInode* parent, const char* path) {
 
     Ext2InodeDisk raw = readRawInode(entry.inodeNum);
     raw.i_links_count--;
+
     if (raw.i_links_count == 0) {
-        Ext2Inode* inode = (Ext2Inode*)getInode(entry.inodeNum);
-        uint32_t totalBlocks = (raw.i_size + m_blockSize - 1) / m_blockSize;
-        for (uint32_t i = 0; i < totalBlocks; i++) {
-            if (uint32_t block = inode->blockMap(i)) freeBlock(block);
+        uint32_t blockSize = m_blockSize;
+        uint32_t ptrsPerBlock = blockSize / sizeof(uint32_t);
+
+        auto freeSingleIndirect = [&](uint32_t block) {
+            if (!block) return;
+            BlockBuf buf;
+            readBlock(block, buf.buf);
+            auto* ptrs = (uint32_t*)buf.buf;
+            for (uint32_t i = 0; i < ptrsPerBlock; i++) {
+                if (ptrs[i]) freeBlock(ptrs[i]);
+            }
+            freeBlock(block);
+        };
+
+        auto freeDoubleIndirect = [&](uint32_t block) {
+            if (!block) return;
+            BlockBuf buf;
+            readBlock(block, buf.buf);
+            auto* ptrs = (uint32_t*)buf.buf;
+            for (uint32_t i = 0; i < ptrsPerBlock; i++) {
+                if (ptrs[i]) freeSingleIndirect(ptrs[i]);
+            }
+            freeBlock(block);
+        };
+
+        auto freeTripleIndirect = [&](uint32_t block) {
+            if (!block) return;
+            BlockBuf buf;
+            readBlock(block, buf.buf);
+            auto* ptrs = (uint32_t*)buf.buf;
+            for (uint32_t i = 0; i < ptrsPerBlock; i++) {
+                if (ptrs[i]) freeDoubleIndirect(ptrs[i]);
+            }
+            freeBlock(block);
+        };
+
+        for (int i = 0; i < 12; i++) {
+            if (raw.i_block[i]) {
+                freeBlock(raw.i_block[i]);
+                raw.i_block[i] = 0;
+            }
         }
-        putInode(inode);
+
+        freeSingleIndirect(raw.i_block[12]);
+        raw.i_block[12] = 0;
+
+        freeDoubleIndirect(raw.i_block[13]);
+        raw.i_block[13] = 0;
+
+        freeTripleIndirect(raw.i_block[14]);
+        raw.i_block[14] = 0;
+
         freeInode(entry.inodeNum);
     }
     else {

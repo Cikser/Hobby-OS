@@ -425,7 +425,7 @@ uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
 
     char path[256];
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    strcpy(path, (char*)buf);
+    PCB::runningProcess()->resolveRelative((char*) buf, path);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
     int ret = VFS::unlink(path, flags);

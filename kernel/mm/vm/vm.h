@@ -17,8 +17,9 @@ public:
 
 private:
     friend class Thread;
-    alignas(4096) static uint64_t s_bootPmt[512];
+    alignas(4096) static uint64_t s_bootPmt[PMT::PMT_SIZE];
 
+    static constexpr uint32_t USER_THRESHOLD = 256;
     static constexpr uint64_t level2Index(uint64_t va);
 };
 

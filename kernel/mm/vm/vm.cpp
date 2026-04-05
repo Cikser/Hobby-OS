@@ -4,7 +4,7 @@
 #include "pmt.h"
 #include "../../hw/memlayout.h"
 
-alignas(4096) uint64_t VM::s_bootPmt[512];
+alignas(4096) uint64_t VM::s_bootPmt[PMT::PMT_SIZE];
 
 extern "C" char _bss_start_pa[];
 extern "C" char _bss_end_pa[];
@@ -19,7 +19,7 @@ void VM::bootstrap() {
     while (bss_cur < bss_end) *bss_cur++ = 0;
 
     auto* boot = (uint64_t*)_boot_pmt_pa;
-    for (int i = 0; i < 512; i++) boot[i] = 0;
+    for (int i = 0; i < PMT::PMT_SIZE; i++) boot[i] = 0;
 
     boot[(KERNEL_PHYS >> 30) & 0x1FF] =
         ((KERNEL_PHYS >> 12) << 10) | (PMT::PAGE_KERN_X | PMT::PAGE_A);
@@ -41,7 +41,7 @@ PMT* VM::createPMT() {
     auto pmt = new PMT();
     if (!pmt) return nullptr;
 
-    for (int i = 256; i < 512; i++) {
+    for (int i = USER_THRESHOLD; i < PMT::PMT_SIZE; i++) {
         pmt->m_entries[i] = s_bootPmt[i];
     }
     return pmt;
@@ -50,7 +50,7 @@ PMT* VM::createPMT() {
 void VM::destroyPMT(const PMT* pmt) {
     if (!pmt) return;
 
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < USER_THRESHOLD; i++) {
         uint64_t l2pte = pmt->m_entries[i];
         if (!PMT::pteValid(l2pte)) continue;
 
@@ -73,7 +73,7 @@ void VM::destroyPMT(const PMT* pmt) {
 }
 
 bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
-        for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < USER_THRESHOLD; i++) {
         if (!PMT::pteValid(src->m_entries[i])) continue;
 
         auto* l1src = (PMT*)PMT::pte2table(src->m_entries[i]);
@@ -82,7 +82,7 @@ bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
 
         bool l1_has_entry = false;
 
-        for (int j = 0; j < 512; j++) {
+        for (int j = 0; j < PMT::PMT_SIZE; j++) {
             if (!PMT::pteValid(l1src->m_entries[j])) continue;
 
             auto* l0src = (PMT*)PMT::pte2table(l1src->m_entries[j]);
@@ -94,7 +94,7 @@ bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
 
             bool l0_has_entry = false;
 
-            for (int k = 0; k < 512; k++) {
+            for (int k = 0; k < PMT::PMT_SIZE; k++) {
                 if (!PMT::pteValid(l0src->m_entries[k])) continue;
 
                 uint64_t va = ((uint64_t)i << PMT::L2_OFFSET) |
@@ -139,7 +139,7 @@ bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
 }
 
 void VM::clearUserPages(PMT* pmt) {
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < USER_THRESHOLD; i++) {
         if (!PMT::pteValid(pmt->m_entries[i])) continue;
 
         auto* l1 = (PMT*)MemoryLayout::p2v(PMT::pte2pa(pmt->m_entries[i]));

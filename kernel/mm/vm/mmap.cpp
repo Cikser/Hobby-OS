@@ -388,3 +388,13 @@ void Mmap::unmapPhysicalShared(uint64_t vaStart, uint64_t vaEnd) const {
         m_pmt->unmapPage(va);
     }
 }
+
+bool Mmap::checkOperation(uint64_t va_start, uint64_t va_end, uint32_t op) const {
+    while (va_start < va_end) {
+        MmapRegion* desc = find(va_start);
+        if (!desc) return false;
+        if (!(desc->flags & op)) return false;
+        va_start = desc->vaEnd;
+    }
+    return true;
+}

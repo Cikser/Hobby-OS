@@ -73,6 +73,8 @@ public:
     }
     void operator delete(void* ptr) { s_cache->free(ptr); }
 
+    bool checkOperation(uint64_t va_start, uint64_t va_end, uint32_t op) const;
+
 private:
     uint64_t allocVA(uint64_t hint, uint64_t pages, bool fixed) const;
     static uint64_t protToPte(uint32_t prot);

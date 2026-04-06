@@ -12,7 +12,6 @@ enum class SegType : uint8_t {
     BSS = 3,
     HEAP = 4,
     STACK = 5,
-    MMAP = 6,
 };
 
 struct SegmentDesc {
@@ -58,11 +57,6 @@ public:
     SegmentDesc* heap() const { return m_heap; }
     SegmentDesc* stack() const { return m_stack; }
 
-    SegmentDesc* addMmap(uint8_t flags, uint64_t va_start, uint64_t va_end);
-    SegmentDesc* findMmap(uint64_t va) const;
-    int removeMmap(uint64_t va_start);
-    SegmentDesc* mmapHead() const { return m_mmap; }
-
     SegmentDesc* find(uint64_t va) const;
 
     void clear();
@@ -81,7 +75,6 @@ private:
     static SegmentDesc* allocDesc(SegType type, uint8_t flags,
         uint64_t va_start, uint64_t va_end);
     static void freeDesc(SegmentDesc* desc);
-    static void mmapReverse(SegmentTable* dst, const SegmentDesc* desc);
 
     static SegmentDesc* setSingle(SegmentDesc*& slot, SegType type,
         uint8_t flags, uint64_t va_start, uint64_t va_end);
@@ -92,7 +85,6 @@ private:
     SegmentDesc* m_bss;
     SegmentDesc* m_heap;
     SegmentDesc* m_stack;
-    SegmentDesc* m_mmap;
 };
 
 #endif

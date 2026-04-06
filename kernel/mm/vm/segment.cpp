@@ -5,7 +5,7 @@ KMemCache<SegmentDesc>* SegmentTable::s_descCache  = nullptr;
 
 SegmentTable::SegmentTable()
     : m_text(nullptr), m_roData(nullptr), m_data(nullptr), m_bss(nullptr),
-      m_heap(nullptr), m_stack(nullptr), m_mmap(nullptr)
+      m_heap(nullptr), m_stack(nullptr)
 {}
 
 SegmentDesc* SegmentTable::allocDesc(SegType type, uint8_t flags,
@@ -63,35 +63,6 @@ SegmentDesc* SegmentTable::setStack(uint8_t flags, uint64_t va_start, uint64_t v
     return setSingle(m_stack, SegType::STACK, flags, va_start, va_end);
 }
 
-SegmentDesc* SegmentTable::addMmap(uint8_t flags, uint64_t va_start, uint64_t va_end) {
-    SegmentDesc* desc = allocDesc(SegType::MMAP, flags, va_start, va_end);
-    if (!desc) return nullptr;
-
-    desc->next = m_mmap;
-    m_mmap = desc;
-    return desc;
-}
-
-SegmentDesc* SegmentTable::findMmap(uint64_t va) const {
-    for (SegmentDesc* desc = m_mmap; desc; desc = desc->next)
-        if (desc->contains(va)) return desc;
-    return nullptr;
-}
-
-int SegmentTable::removeMmap(uint64_t va_start) {
-    SegmentDesc* prev = nullptr;
-    for (SegmentDesc* desc = m_mmap; desc; desc = desc->next) {
-        if (desc->start == va_start) {
-            if (prev) prev->next = desc->next;
-            else m_mmap = desc->next;
-            freeDesc(desc);
-            return 0;
-        }
-        prev = desc;
-    }
-    return -1;
-}
-
 SegmentDesc* SegmentTable::find(uint64_t va) const {
     if (m_text && m_text->contains(va)) return m_text;
     if (m_roData && m_roData->contains(va)) return m_roData;
@@ -99,8 +70,6 @@ SegmentDesc* SegmentTable::find(uint64_t va) const {
     if (m_bss && m_bss->contains(va)) return m_bss;
     if (m_heap && m_heap->contains(va)) return m_heap;
     if (m_stack && m_stack->contains(va)) return m_stack;
-
-    return findMmap(va);
 }
 
 void SegmentTable::clear() {
@@ -110,14 +79,6 @@ void SegmentTable::clear() {
     freeDesc(m_bss); m_bss = nullptr;
     freeDesc(m_heap); m_heap = nullptr;
     freeDesc(m_stack); m_stack = nullptr;
-
-    SegmentDesc* desc = m_mmap;
-    while (desc) {
-        SegmentDesc* next = desc->next;
-        freeDesc(desc);
-        desc = next;
-    }
-    m_mmap = nullptr;
 }
 
 SegmentTable* SegmentTable::copy(const SegmentTable* src)
@@ -141,12 +102,6 @@ SegmentTable* SegmentTable::copy(const SegmentTable* src)
         dst->setStack(src->m_stack->flags, src->m_stack->start, src->m_stack->end);
 
     return dst;
-}
-
-void SegmentTable::mmapReverse(SegmentTable* dst, const SegmentDesc* desc) {
-    if (!desc) return;
-    mmapReverse(dst, desc->next);
-    dst->addMmap(desc->flags, desc->start, desc->end);
 }
 
 bool SegmentTable::checkOperation(uint64_t va_start, uint64_t va_end, uint32_t op) const {

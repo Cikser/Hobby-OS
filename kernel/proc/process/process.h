@@ -50,7 +50,8 @@ public:
 
     bool checkOperation(uint64_t addr, uint64_t len, uint32_t op) const {
         if (addr > addr + len) return false;
-        return m_segTable->checkOperation(addr, addr + len, op);
+        if (m_segTable->checkOperation(addr, addr + len, op)) return true;
+        return m_mmap->checkOperation(addr, addr + len, op);
     };
 
 private:

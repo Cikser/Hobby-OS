@@ -70,6 +70,7 @@ SegmentDesc* SegmentTable::find(uint64_t va) const {
     if (m_bss && m_bss->contains(va)) return m_bss;
     if (m_heap && m_heap->contains(va)) return m_heap;
     if (m_stack && m_stack->contains(va)) return m_stack;
+    return nullptr;
 }
 
 void SegmentTable::clear() {

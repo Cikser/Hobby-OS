@@ -82,9 +82,6 @@ uint64_t Mmap::map(uint64_t hint, uint64_t length,
 
     insertRegion(r);
 
-    uint8_t segFlags = (uint8_t)(pteFlags & ~(PMT::PAGE_U | PMT::PAGE_V));
-    m_segTable->addMmap(segFlags, va, va + roundedLen);
-
     return va;
 }
 
@@ -106,7 +103,6 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
         }
 
         uint64_t overlapStart = (r->vaStart > addr) ? r->vaStart : addr;
-        uint64_t overlapEnd = (r->vaEnd   < end) ? r->vaEnd : end;
 
         if (r->shared && r->sharedRef) {
             r->sharedRef->refCount--;
@@ -119,7 +115,6 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
         } else {
             unmapPhysical(r->vaStart, r->vaEnd);
         }
-        m_segTable->removeMmap(overlapStart);
 
         bool trimLeft = (r->vaStart < addr);
         bool trimRight = (r->vaEnd > end);
@@ -135,7 +130,6 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
         if (trimLeft && trimRight) {
             uint64_t origEnd = r->vaEnd;
             r->vaEnd = addr;
-            m_segTable->addMmap(r->prot, r->vaStart, addr);
 
             auto* right = new MmapRegion();
             right->vaStart = end;
@@ -147,7 +141,6 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
             right->shared = r->shared;
             right->next = r->next;
             r->next = right;
-            m_segTable->addMmap(right->prot, end, origEnd);
 
             prev = right;
             r = right->next;
@@ -156,7 +149,6 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
         }
         if (trimLeft) {
             r->vaEnd = addr;
-            m_segTable->addMmap(r->prot, r->vaStart, addr);
             prev = r;
             r    = r->next;
             continue;
@@ -164,7 +156,6 @@ int Mmap::unmap(uint64_t addr, uint64_t length) {
         }
         r->vaStart = end;
         r->fileOffset = r->fileOffset + (end - overlapStart);
-        m_segTable->addMmap(r->prot, end, r->vaEnd);
         prev = r;
         r = r->next;
     }
@@ -186,14 +177,6 @@ int Mmap::protect(uint64_t addr, uint64_t length, uint32_t prot) const {
         if (!pa) continue;
         m_pmt->unmapPage(va);
         m_pmt->mapPage(va, pa, pteFlags);
-    }
-
-    for (MmapRegion* r = m_head; r; r = r->next) {
-        if (r->vaEnd <= addr || r->vaStart >= end) continue;
-        r->prot = prot;
-        m_segTable->removeMmap(r->vaStart);
-        uint8_t segFlags = (uint8_t)(pteFlags & ~(PMT::PAGE_U | PMT::PAGE_V));
-        m_segTable->addMmap(segFlags, r->vaStart, r->vaEnd);
     }
 
     return 0;
@@ -244,9 +227,6 @@ Mmap* Mmap::clone(PMT* newPmt, SegmentTable* newSegTable) const {
         nr->sharedRef = r->sharedRef;
         if (nr->sharedRef) nr->sharedRef->refCount++;
         child->insertRegion(nr);
-
-        uint8_t segFlags = (uint8_t)(pteFlags & ~(PMT::PAGE_U | PMT::PAGE_V));
-        newSegTable->addMmap(segFlags, nr->vaStart, nr->vaEnd);
     }
 
     child->m_nextHint = m_nextHint;

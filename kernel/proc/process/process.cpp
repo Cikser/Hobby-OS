@@ -67,6 +67,7 @@ void Process::clear() {
     }
     delete m_mmap;
     delete m_segTable;
+    delete m_cwdPath;
     VM::destroyPMT(m_pmt);
     PCB::clear();
 }

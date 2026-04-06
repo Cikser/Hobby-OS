@@ -1,8 +1,10 @@
 #include "vm.h"
-
-#include "mem.h"
+#include "../mem.h"
 #include "pmt.h"
+#include "page_meta.h"
 #include "../../hw/memlayout.h"
+#include "../../hw/riscv.h"
+#include "../../proc/process/process.h"
 
 alignas(4096) uint64_t VM::s_bootPmt[PMT::PMT_SIZE];
 
@@ -11,7 +13,7 @@ extern "C" char _bss_end_pa[];
 extern "C" char _boot_pmt_pa[];
 
 void VM::bootstrap() {
-    constexpr uint64_t KERNEL_PHYS = MemoryLayout::PHYS_BASE;
+    constexpr uint64_t KERNEL_PHYS   = MemoryLayout::PHYS_BASE;
     constexpr uint64_t PHYS_MAP_VIRT = MemoryLayout::KERNEL_OFFSET;
 
     auto* bss_cur = (uint64_t*)_bss_start_pa;
@@ -61,9 +63,9 @@ void VM::destroyPMT(const PMT* pmt) {
             auto* l0 = (PMT*)MemoryLayout::p2v(PMT::pte2pa(l1pte));
             for (auto l0pte : l0->m_entries) {
                 if (!PMT::pteValid(l0pte)) continue;
-
-                auto page = (void*)MemoryLayout::p2v(PMT::pte2pa(l0pte));
-                MemoryAllocator::kfreePage(page);
+                uint64_t pa = PMT::pte2pa(l0pte);
+                if (PageRefCount::decRef(pa))
+                    MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pa));
             }
             delete l0;
         }
@@ -73,6 +75,7 @@ void VM::destroyPMT(const PMT* pmt) {
 }
 
 bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
+    PageRefCount::init();
     for (int i = 0; i < USER_THRESHOLD; i++) {
         if (!PMT::pteValid(src->m_entries[i])) continue;
 
@@ -95,7 +98,8 @@ bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
             bool l0_has_entry = false;
 
             for (int k = 0; k < PMT::PMT_SIZE; k++) {
-                if (!PMT::pteValid(l0src->m_entries[k])) continue;
+                uint64_t srcPte = l0src->m_entries[k];
+                if (!PMT::pteValid(srcPte)) continue;
 
                 uint64_t va = ((uint64_t)i << PMT::L2_OFFSET) |
                               ((uint64_t)j << PMT::L1_OFFSET) |
@@ -103,19 +107,18 @@ bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
 
                 if (skipMmap && skipMmap->find(va)) continue;
 
-                void* newPage = MemoryAllocator::kallocPage();
-                if (!newPage) {
-                    delete l0dst;
-                    delete l1dst;
-                    return false;
+                uint64_t pa = PMT::pte2pa(srcPte);
+                uint64_t flags = srcPte & 0x3FF;
+
+                if (flags & PMT::PAGE_W) {
+                    uint64_t cowFlags = (flags & ~PMT::PAGE_W) | PMT::PAGE_COW;
+                    l0src->m_entries[k] = PMT::makePte(pa, cowFlags);
+                    l0dst->m_entries[k] = PMT::makePte(pa, cowFlags);
                 }
-
-                uint64_t srcPa = PMT::pte2pa(l0src->m_entries[k]);
-                memcpy(newPage, (void*)MemoryLayout::p2v(srcPa), MemoryLayout::PAGE_SIZE);
-
-                uint64_t flags = l0src->m_entries[k] & 0x3FF;
-                l0dst->m_entries[k] = PMT::makePte(MemoryLayout::v2p((uint64_t)newPage), flags);
-
+                else {
+                    l0dst->m_entries[k] = srcPte;
+                }
+                PageRefCount::incRef(pa);
                 l0_has_entry = true;
             }
 
@@ -135,6 +138,8 @@ bool VM::copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap) {
 
         dst->m_entries[i] = PMT::makePte(MemoryLayout::v2p((uint64_t)l1dst), PMT::PAGE_V);
     }
+
+    RiscV::flushTLB();
     return true;
 }
 
@@ -149,12 +154,55 @@ void VM::clearUserPages(PMT* pmt) {
             auto* l0 = (PMT*)MemoryLayout::p2v(PMT::pte2pa(l1pte));
             for (auto l0pte : l0->m_entries) {
                 if (!PMT::pteValid(l0pte)) continue;
-                auto page = (void*)MemoryLayout::p2v(PMT::pte2pa(l0pte));
-                MemoryAllocator::kfreePage(page);
+                uint64_t pa = PMT::pte2pa(l0pte);
+                if (PageRefCount::decRef(pa))
+                    MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pa));
             }
             delete l0;
         }
         delete l1;
         pmt->m_entries[i] = 0;
     }
+}
+
+bool VM::handleCowFault(uint64_t faultVa) {
+    Process* proc = PCB::runningProcess();
+    if (!proc) return false;
+
+    PMT* pmt = proc->pmt();
+    if (!pmt) return false;
+
+    uint64_t flags = pmt->getFlags(faultVa);
+    if (!(flags & PMT::PAGE_COW)) return false;
+
+    uint64_t va = MemoryLayout::pageRoundDown(faultVa);
+    uint64_t pa = pmt->translate(va);
+    if (!pa) return false;
+
+    uint64_t newFlags = (flags & ~PMT::PAGE_COW) | PMT::PAGE_W;
+    uint32_t ref = PageRefCount::getRef(pa);
+
+    if (ref <= 1) {
+        pmt->unmapPage(va);
+        pmt->mapPage(va, pa, newFlags);
+        PageRefCount::decRef(pa);
+    }
+    else {
+        void* newPage = MemoryAllocator::kallocPage();
+        if (!newPage) return false;
+
+        memcpy(newPage, (void*)MemoryLayout::p2v(pa), MemoryLayout::PAGE_SIZE);
+
+        uint64_t newPa = MemoryLayout::v2p((uint64_t)newPage);
+
+        pmt->unmapPage(va);
+        pmt->mapPage(va, newPa, newFlags);
+
+        if (PageRefCount::decRef(pa)) {
+            MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(pa));
+        }
+    }
+
+    RiscV::flushTLB();
+    return true;
 }

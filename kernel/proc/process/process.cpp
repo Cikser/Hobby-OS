@@ -101,14 +101,36 @@ Process* Process::fork() {
     m_spaceLock.acquire();
 
     PMT* pmt = VM::createPMT();
-    if (!pmt) return nullptr;
+    if (!pmt) {
+        m_spaceLock.release();
+        return nullptr;
+    }
 
-    if (!VM::copyPMT(pmt, m_pmt, m_mmap)) return nullptr;
+    if (!VM::copyPMT(pmt, m_pmt, m_mmap)) {
+        delete pmt;
+        m_spaceLock.release();
+        return nullptr;
+    }
 
     auto child = new Process(pmt, -1, this);
+    uint64_t childStackVa = USER_STACK_TOP -
+        child->m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
+        - USER_STACK_SIZE;
 
-    MemoryAllocator::kfreePages(child->m_ustack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-    child->m_ustack = (uint8_t*)MemoryLayout::p2v(child->m_pmt->translate(USER_STACK_TOP - USER_STACK_SIZE));
+    uint64_t constructorPa = child->m_pmt->translate(childStackVa);
+    if (constructorPa) {
+        child->m_pmt->unmapPage(childStackVa);
+        MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(constructorPa));
+    }
+
+    uint64_t parentStackVa = USER_STACK_TOP -
+        m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
+        - USER_STACK_SIZE;
+
+    uint64_t sharedPa = pmt->translate(parentStackVa);
+    child->m_ustack = sharedPa
+        ? (uint8_t*)MemoryLayout::p2v(sharedPa)
+        : m_ustack;
 
     memcpy(child->m_trapFrame, m_trapFrame, sizeof(TrapFrame));
     child->m_entry = m_trapFrame->sepc;
@@ -124,13 +146,8 @@ Process* Process::fork() {
         : new Mmap(child->m_pmt, child->m_segTable);
     m_spaceLock.release();
     m_lock.acquire();
-    if (!m_firstChild) {
-        m_firstChild = child;
-    }
-    else {
-        child->m_nextSibling = m_firstChild;
-        m_firstChild = child;
-    }
+    child->m_nextSibling = m_firstChild;
+    m_firstChild = child;
     m_lock.release();
     return child;
 }

@@ -7,6 +7,8 @@
 #include "../io/console/console.h"
 #include "../io/disk/disk.h"
 #include "../proc/pcb.h"
+#include "../mm/vm/page_meta.h"
+#include "../mm/mem.h"
 #include "syscall/syscall.h"
 
 extern "C" void _trap_kernel_entry();
@@ -50,12 +52,16 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
         }
         case EXTERNAL_INTERRUPT: {
             uint32_t irq = PLIC::claim();
-
-            if (irq == PLIC::IRQ_VIRTIO_DISK) {
+            if (irq == PLIC::IRQ_VIRTIO_DISK)
                 Disk::interruptHandler();
-            }
             if (irq)
                 PLIC::complete(irq);
+            break;
+        }
+        case PF_STORE: {
+            if (VM::handleCowFault(stval)) break;
+            Console::kprintf("store page fault: sepc=0x%lx stval=0x%lx\n", sepc, stval);
+            PCB::runningProcess()->exit(-1);
             break;
         }
         default: {

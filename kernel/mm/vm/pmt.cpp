@@ -77,6 +77,12 @@ uint64_t PMT::translate(uint64_t va) {
     return pte2pa(*pte) + (va & (PAGE_SIZE - 1));
 }
 
+uint64_t PMT::getFlags(uint64_t va) {
+    uint64_t* pte = walk(va, false);
+    if (!pte || !pteValid(*pte)) return 0;
+    return *pte & 0x3FF;
+}
+
 void PMT::activate() const {
     uint64_t addr = (uint64_t)m_entries;
     uint64_t pa;

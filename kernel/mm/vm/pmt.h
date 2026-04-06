@@ -22,6 +22,7 @@ public:
     uint64_t unmapPage(uint64_t va);
     uint64_t unmapPages(uint64_t va, uint64_t count);
     uint64_t translate(uint64_t va);
+    uint64_t getFlags(uint64_t va);
     void activate() const;
     void clean();
     bool empty() const;
@@ -34,6 +35,7 @@ public:
     static constexpr uint64_t PAGE_G = (1ULL << 5);
     static constexpr uint64_t PAGE_A = (1ULL << 6);
     static constexpr uint64_t PAGE_D = (1ULL << 7);
+    static constexpr uint64_t PAGE_COW = (1ULL << 8);
 
     static constexpr uint64_t PAGE_KERN = PAGE_V | PAGE_R | PAGE_W | PAGE_G;
     static constexpr uint64_t PAGE_KERN_X = PAGE_KERN | PAGE_X;
@@ -77,7 +79,6 @@ private:
     uint64_t m_entries[PMT_SIZE];
 
     uint64_t* walk(uint64_t va, bool alloc);
-
 };
 
 #endif

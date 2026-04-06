@@ -15,6 +15,8 @@ public:
     static bool copyPMT(PMT* dst, PMT* src, const Mmap* skipMmap = nullptr);
     static void clearUserPages(PMT* pmt);
 
+    static bool handleCowFault(uint64_t faultVa);
+
 private:
     friend class Thread;
     alignas(4096) static uint64_t s_bootPmt[PMT::PMT_SIZE];

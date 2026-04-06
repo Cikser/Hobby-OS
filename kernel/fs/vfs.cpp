@@ -5,6 +5,7 @@
 #include "../mm/mem.h"
 #include "ext2/ext2.h"
 #include "../proc/process/process.h"
+#include "path_utils.h"
 
 VfsMount* VFS::m_mount = nullptr;
 
@@ -157,33 +158,41 @@ int VFS::unlink(const char* path, uint32_t flags) {
 VfsInode* VFS::resolvePath(const char* path) {
     if (!m_mount) return nullptr;
 
-    char absolutePath[256];
+    char* absolutePath = nullptr;
 
     if (path[0] == '/') {
-        strncpy(absolutePath, path, 255);
-        absolutePath[255] = '\0';
+        absolutePath = kstrdup(path, PATH_MAX);
     }
     else {
         Process* running = PCB::runningProcess();
         if (!running) return nullptr;
-        running->resolveRelative(path, absolutePath);
-        if (absolutePath[0] == '\0') return nullptr;
+        absolutePath = running->resolveRelative(path);
     }
+
+    if (!absolutePath) return nullptr;
 
     uint32_t cachedNum = PathCache::lookup(absolutePath);
     if (cachedNum != 0) {
         VfsInode* inode = getInode(cachedNum);
-        if (inode) return inode;
+        if (inode) {
+            MemoryAllocator::kfree(absolutePath);
+            return inode;
+        }
         PathCache::invalidate(absolutePath);
     }
 
     VfsInode* current = getInode(2);
     const char* p = absolutePath + 1;
 
+    char* component = (char*)MemoryAllocator::kmalloc(PATH_MAX + 1);
+    if (!component) {
+        MemoryAllocator::kfree(absolutePath);
+        return nullptr;
+    }
+
     while (*p != '\0') {
-        char component[256];
-        int len = 0;
-        while (*p != '\0' && *p != '/' && len < 255)
+        uint64_t len = 0;
+        while (*p != '\0' && *p != '/' && len < PATH_MAX)
             component[len++] = *p++;
         component[len] = '\0';
         if (*p == '/') p++;
@@ -191,6 +200,8 @@ VfsInode* VFS::resolvePath(const char* path) {
 
         if (!current->isDir()) {
             putInode(current, current->inodeNum());
+            MemoryAllocator::kfree(component);
+            MemoryAllocator::kfree(absolutePath);
             return nullptr;
         }
 
@@ -207,11 +218,15 @@ VfsInode* VFS::resolvePath(const char* path) {
 
         if (!found) {
             putInode(current, current->inodeNum());
+            MemoryAllocator::kfree(component);
+            MemoryAllocator::kfree(absolutePath);
             return nullptr;
         }
     }
     PathCache::insert(absolutePath, current->inodeNum());
 
+    MemoryAllocator::kfree(component);
+    MemoryAllocator::kfree(absolutePath);
     return current;
 }
 
@@ -228,10 +243,14 @@ VfsInode* VFS::resolveParent(const char* path, const char** outName) {
     if (lastSlash == path)
         return getInode(2);
 
-    char parentPath[256];
-    uint32_t len = lastSlash - path;
+    uint64_t len = lastSlash - path;
+    char* parentPath = (char*)MemoryAllocator::kmalloc(len + 1);
+    if (!parentPath) return nullptr;
+
     memcpy(parentPath, path, len);
     parentPath[len] = '\0';
 
-    return resolvePath(parentPath);
+    VfsInode* result = resolvePath(parentPath);
+    MemoryAllocator::kfree(parentPath);
+    return result;
 }

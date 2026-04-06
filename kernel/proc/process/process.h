@@ -24,7 +24,8 @@ public:
 
     static Process* createInit();
     Thread* createThread(void(*entry)(void*), void* args = nullptr);
-    void resolveRelative(const char* path, char* out) const;
+    char* resolveRelative(const char* path) const;
+    char* cwd() const;
 
     Process* owner() override { return this; }
     bool isProcess() override { return true; }
@@ -42,7 +43,6 @@ public:
         int fd, uint64_t offset) const;
     int mprotect(uint64_t addr, uint64_t length, uint32_t prot) const;
     int munmap(uint64_t addr, uint64_t length) const;
-    int getcwd(char* buf, size_t size) const;
     int chdir(const char* path);
     int mkdir(const char* path, uint32_t mode) const;
     int fstat(int fd, InodeStat* st) const;
@@ -70,7 +70,7 @@ private:
     File* m_fds[MAX_FDS]{};
     SegmentTable* m_segTable;
     uint32_t m_cwdInode;
-    char m_cwdPath[256]{};
+    char* m_cwdPath;
     Process* m_nextSibling;
     Process* m_firstChild;
     int m_exitCode;

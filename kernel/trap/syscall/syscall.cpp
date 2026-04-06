@@ -1,12 +1,12 @@
 #include "syscall.h"
-
-#include "vfs.h"
 #include "../../io/console/console.h"
 #include "../../proc/pcb.h"
 #include "../../fs/file.h"
 #include "../../hw/riscv.h"
 #include "../../mm/mem.h"
 #include "../../proc/process/process.h"
+#include "../../fs/path_utils.h"
+#include "../../fs/vfs.h"
 
 class Process;
 
@@ -46,6 +46,22 @@ void SyscallHandler::handle(TrapFrame* tf) {
         tf->a0 = -1;
         break;
     }
+}
+
+static char* copyPathFromUser(uint64_t userAddr) {
+    if (!userAddr) return nullptr;
+
+    if (!PCB::runningProcess()->checkOperation(userAddr, 1, SegmentDesc::SEG_R))
+        return nullptr;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    char* result = kstrdup_user((const char*)userAddr, PATH_MAX);
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    if (!PCB::runningProcess()->checkOperation(userAddr, strlen(result), SegmentDesc::SEG_R))
+        return nullptr;
+
+    return result;
 }
 
 uint64_t SyscallHandler::sys_getpid(TrapFrame* tf) {
@@ -109,14 +125,8 @@ uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
     uint64_t flags = tf->a2;
     uint64_t mode = tf->a3;
 
-    if (!PCB::runningProcess()->checkOperation(filePath, 256, SegmentDesc::SEG_R))
-        return -1;
-
-    char path[256];
-    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    auto src = (char*)filePath;
-    strcpy(path, src);
-    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    AutoPath path(copyPathFromUser(filePath));
+    if (!path.valid()) return -1;
 
     return PCB::runningProcess()->openFile(path, flags);
 }
@@ -129,17 +139,10 @@ uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
     uint64_t pathAddr = tf->a0;
 
-    if (!PCB::runningProcess()->checkOperation(pathAddr, 256, SegmentDesc::SEG_R))
-        return -1;
+    AutoPath path(copyPathFromUser(pathAddr));
+    if (!path.valid()) return -1;
 
-    char path[256];
-    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    strcpy(path, (char*)pathAddr);
-    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
-
-    auto* proc = PCB::runningProcess();
-
-    return proc->exec(path);
+    return PCB::runningProcess()->exec(path);
 }
 
 uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
@@ -197,45 +200,36 @@ uint64_t SyscallHandler::sys_getcwd(TrapFrame* tf) {
     if (!PCB::runningProcess()->checkOperation((uint64_t)buf, size, SegmentDesc::SEG_W))
         return -1;
 
-    char kbuf[256];
-    int ret = PCB::runningProcess()->getcwd(kbuf, sizeof(kbuf));
-    if (ret < 0) return (uint64_t)-1;
+    char* kbuf = PCB::runningProcess()->cwd();
+    if (!kbuf) return (uint64_t)-1;
 
     uint64_t needed = strlen(kbuf) + 1;
-    if (needed > size) return (uint64_t)-1;
+    if (needed > size) {
+        MemoryAllocator::kfree(kbuf);
+        return (uint64_t)-1;
+    }
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     memcpy(buf, kbuf, needed);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
+    MemoryAllocator::kfree(kbuf);
     return 0;
 }
 
 uint64_t SyscallHandler::sys_chdir(TrapFrame* tf) {
-
-    if (!PCB::runningProcess()->checkOperation(tf->a0, 256, SegmentDesc::SEG_R))
-        return -1;
-
-    char path[256];
-
-    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    strcpy(path, (char*)tf->a0);
-    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    AutoPath path(copyPathFromUser(tf->a0));
+    if (!path.valid()) return -1;
 
     int ret = PCB::runningProcess()->chdir(path);
     return (ret == 0) ? 0 : (uint64_t)-1;
 }
 
 uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
-    char path[256];
     auto mode = (uint32_t)tf->a1;
 
-    if (!PCB::runningProcess()->checkOperation(tf->a0, 256, SegmentDesc::SEG_R))
-        return -1;
-
-    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    strcpy(path, (char*)tf->a0);
-    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    AutoPath path(copyPathFromUser(tf->a0));
+    if (!path.valid()) return -1;
 
     int ret = PCB::runningProcess()->mkdir(path, mode);
     return (ret == 0) ? 0 : (uint64_t)-1;
@@ -420,13 +414,8 @@ uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
     uint64_t buf = tf->a1;
     uint32_t flags = tf->a2;
 
-    if (!PCB::runningProcess()->checkOperation(buf, 256, SegmentDesc::SEG_R))
-        return -1;
-
-    char path[256];
-    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-    PCB::runningProcess()->resolveRelative((char*) buf, path);
-    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    AutoPath path(copyPathFromUser(buf));
+    if (!path.valid()) return -1;
 
     int ret = VFS::unlink(path, flags);
     return ret;

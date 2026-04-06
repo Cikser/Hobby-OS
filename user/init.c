@@ -1152,16 +1152,12 @@ static void test_unlink(void) {
     check(fd_before >= 0, "file exists before unlink");
     if (fd_before >= 0) close(fd_before);
 
-    int r = __syscall(1026, (long)"/to_delete.txt", 0, 0, 0, 0, 0);
+    int r = unlink("/to_delete.txt");
 
     if (r == 0) {
         int fd_after = open("/to_delete.txt", O_RDONLY);
         check(fd_after < 0, "file gone after unlink");
         if (fd_after >= 0) close(fd_after);
-    } else {
-        printf("    unlink not available or returned %d, skipping\n", r);
-        check(1, "unlink skipped (syscall not wired up)");
-        check(1, "file gone after unlink - skipped");
     }
 }
 

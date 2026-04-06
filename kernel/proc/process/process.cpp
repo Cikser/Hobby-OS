@@ -1,6 +1,7 @@
 #include "process.h"
 
 #include "garbage.h"
+#include "path_utils.h"
 #include "riscv.h"
 #include "../thread/thread.h"
 #include "../../io/console/uart_inode.h"
@@ -29,6 +30,8 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
             if (parent->m_fds[i])
                 m_fds[i] = new File(*parent->m_fds[i], true);
         }
+        m_cwdInode = parent->m_cwdInode;
+        m_cwdPath  = kstrdup(parent->m_cwdPath, PATH_MAX);
     }
     else {
         uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
@@ -42,8 +45,7 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
         m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
             USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
         m_cwdInode = 2;
-        m_cwdPath[0] = '/';
-        m_cwdPath[1] = '\0';
+        m_cwdPath  = kstrdup("/", PATH_MAX);
         m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
         m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
         m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
@@ -398,9 +400,11 @@ int Process::mprotect(uint64_t addr, uint64_t length, uint32_t prot) const {
     return ret;
 }
 
-void Process::resolveRelative(const char* path, char* out) const {
-    char temp[256];
-    uint32_t len = 0;
+char* Process::resolveRelative(const char* path) const {
+    char* temp = (char*)MemoryAllocator::kmalloc(PATH_MAX + 1);
+    if (!temp) return nullptr;
+
+    uint64_t len = 0;
 
     if (path[0] == '/') {
         temp[0] = '/';
@@ -408,20 +412,27 @@ void Process::resolveRelative(const char* path, char* out) const {
         len = 1;
     }
     else {
-        uint32_t cwdLen = strlen(m_cwdPath);
+        uint64_t cwdLen = strlen(m_cwdPath);
+        if (cwdLen > PATH_MAX) {
+            MemoryAllocator::kfree(temp);
+            return nullptr;
+        }
         memcpy(temp, m_cwdPath, cwdLen + 1);
         len = cwdLen;
+    }
+
+    char* component = (char*)MemoryAllocator::kmalloc(PATH_MAX + 1);
+    if (!component) {
+        MemoryAllocator::kfree(temp);
+        return nullptr;
     }
 
     const char* p = (path[0] == '/') ? path + 1 : path;
 
     while (*p != '\0') {
-        char component[64];
-        int cLen = 0;
-
-        while (*p != '\0' && *p != '/' && cLen < 63) {
+        uint64_t cLen = 0;
+        while (*p != '\0' && *p != '/' && cLen < PATH_MAX)
             component[cLen++] = *p++;
-        }
         component[cLen] = '\0';
         if (*p == '/') p++;
         if (cLen == 0) continue;
@@ -432,64 +443,67 @@ void Process::resolveRelative(const char* path, char* out) const {
         if (strcmp(component, "..") == 0) {
             if (len > 1) {
                 len--;
-                while (len > 0 && temp[len] != '/') {
+                while (len > 0 && temp[len] != '/')
                     len--;
-                }
                 if (len == 0) len = 1;
                 temp[len] = '\0';
             }
-        } else {
+        }
+        else {
             if ((len > 1 && temp[len-1] != '/') || (len == 1 && temp[0] != '/'))
                 temp[len++] = '/';
 
-            if (len + cLen < 255) {
+            if (len + cLen <= PATH_MAX) {
                 memcpy(temp + len, component, cLen);
                 len += cLen;
                 temp[len] = '\0';
-            }
-            else {
-                out[0] = '\0';
-                return;
+            } else {
+                MemoryAllocator::kfree(component);
+                MemoryAllocator::kfree(temp);
+                return nullptr;
             }
         }
     }
+
+    MemoryAllocator::kfree(component);
 
     if (len == 0) {
         temp[0] = '/';
         temp[1] = '\0';
     }
 
-    memcpy(out, temp, len + 1);
+    char* result = kstrdup(temp, PATH_MAX);
+    MemoryAllocator::kfree(temp);
+    return result;
 }
 
-int Process::getcwd(char* buf, uint64_t size) const {
-    if (!buf || size == 0) return -1;
-
-    uint64_t needed = strlen(m_cwdPath) + 1;
-    if (needed > size) return -1;
-
-    memcpy(buf, m_cwdPath, needed);
-    return 0;
+char* Process::cwd() const {
+    return kstrdup(m_cwdPath ? m_cwdPath : "/", PATH_MAX);
 }
 
 int Process::chdir(const char* path) {
     if (!path || path[0] == '\0') return -1;
 
-    char resolved[256];
-    resolveRelative(path, resolved);
-    if (resolved[0] == '\0') return -1;
+    char* resolved = resolveRelative(path);
+    if (!resolved) return -1;
 
     File* f = VFS::open(resolved, File::O_RDONLY);
-    if (!f) return -1;
-
+    if (!f) {
+        MemoryAllocator::kfree(resolved);
+        return -1;
+    }
     f->close();
     delete f;
 
     VfsInode* inode = VFS::resolvePath(resolved);
-    if (!inode) return -1;
+    if (!inode) {
+        MemoryAllocator::kfree(resolved);
+        return -1;
+    }
 
     if (!inode->isDir()) {
         VFS::putInode(inode, inode->inodeNum());
+        MemoryAllocator::kfree(resolved);
         return -1;
     }
 
@@ -497,11 +511,12 @@ int Process::chdir(const char* path) {
     VFS::putInode(inode, newInodeNum);
 
     m_cwdInode = newInodeNum;
-    strcpy(m_cwdPath, resolved);
+    uint64_t rlen = strlen(resolved);
+    if (rlen > 1 && resolved[rlen - 1] == '/')
+        resolved[rlen - 1] = '\0';
 
-    uint32_t len = strlen(m_cwdPath);
-    if (len > 1 && m_cwdPath[len - 1] == '/')
-        m_cwdPath[len - 1] = '\0';
+    if (m_cwdPath) MemoryAllocator::kfree(m_cwdPath);
+    m_cwdPath = resolved;
 
     return 0;
 }
@@ -509,11 +524,12 @@ int Process::chdir(const char* path) {
 int Process::mkdir(const char* path, uint32_t mode) const {
     if (!path || path[0] == '\0') return -1;
 
-    char resolved[256];
-    resolveRelative(path, resolved);
-    if (resolved[0] == '\0') return -1;
+    char* resolved = resolveRelative(path);
+    if (!resolved) return -1;
 
-    return VFS::mkdir(resolved);
+    int ret = VFS::mkdir(resolved);
+    MemoryAllocator::kfree(resolved);
+    return ret;
 }
 
 int Process::fstat(int fd, InodeStat* st) const {

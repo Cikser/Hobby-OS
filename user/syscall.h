@@ -29,6 +29,7 @@ typedef void*              mmap_ptr_t;
 #define SYS_EXIT            93
 #define SYS_EXIT_GROUP      94
 #define SYS_SET_TID_ADDRESS 96
+#define SYS_FUTEX           98
 #define SYS_CLOCK_GETTIME   113
 #define SYS_UNAME           160
 #define SYS_GETPID          172
@@ -280,6 +281,12 @@ static inline int uname(struct utsname* buf) {
 
 static inline pid_t set_tid_address(int* tidptr) {
     return (pid_t)_SC1(SYS_SET_TID_ADDRESS, tidptr);
+}
+
+static inline long futex(uint32_t* uaddr, int op, uint32_t val,
+                            unsigned long timeout_ticks) {
+      return __syscall(SYS_FUTEX, (long)uaddr, (long)op,
+                       (long)val, (long)timeout_ticks, 0, 0);
 }
 
 static inline size_t strlen(const char* s) {

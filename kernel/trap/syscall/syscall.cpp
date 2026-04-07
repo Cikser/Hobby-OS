@@ -1,4 +1,5 @@
 #include "syscall.h"
+#include "../trap.h"
 #include "../../io/console/console.h"
 #include "../../proc/pcb.h"
 #include "../../fs/file.h"
@@ -7,8 +8,7 @@
 #include "../../proc/process/process.h"
 #include "../../fs/path_utils.h"
 #include "../../fs/vfs.h"
-
-class Process;
+#include "../../proc/sync/futex.h"
 
 void SyscallHandler::handle(TrapFrame* tf) {
     switch (tf->a7) {
@@ -41,6 +41,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_GETEGID: tf->a0 = sys_getegid(tf); break;
     case SYS_LSEEK: tf->a0 = sys_lseek(tf); break;
     case SYS_UNLINKAT: tf->a0 = sys_unlinkat(tf); break;
+    case SYS_FUTEX: tf->a0 = sys_futex(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -419,4 +420,16 @@ uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
 
     int ret = VFS::unlink(path, flags);
     return ret;
+}
+
+uint64_t SyscallHandler::sys_futex(TrapFrame* tf) {
+    auto* uaddr = (uint32_t*)tf->a0;
+    auto op = (int)(int64_t)tf->a1;
+    auto val = (uint32_t)tf->a2;
+    auto timeout = (time_t)tf->a3;
+
+    if (!PCB::runningProcess()->checkOperation((uint64_t)uaddr, sizeof(uint32_t), SegmentDesc::SEG_R))
+        return (uint64_t)FUTEX_EINVAL;
+
+    return (uint64_t)Futex::syscall(uaddr, op, val, timeout);
 }

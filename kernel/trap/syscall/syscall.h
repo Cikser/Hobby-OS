@@ -21,6 +21,7 @@ enum Syscall {
     SYS_EXIT = 93,
     SYS_EXIT_GROUP = 94,
     SYS_SET_TID_ADDRESS = 96,
+    SYS_FUTEX = 98,
     SYS_CLOCK_GETTIME = 113,
     SYS_UNAME = 160,
     SYS_GETPID = 172,
@@ -71,6 +72,7 @@ private:
     static uint64_t sys_getegid(TrapFrame* tf);
     static uint64_t sys_lseek(TrapFrame* tf);
     static uint64_t sys_unlinkat(TrapFrame* tf);
+    static uint64_t sys_futex(TrapFrame* tf);
 };
 
 #endif

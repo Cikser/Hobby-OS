@@ -14,7 +14,7 @@
 KMemCache<Process>* Process::s_cache = nullptr;
 Process* Process::s_init = nullptr;
 
-Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
+Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
     PCB(entry, pmt),
     m_threads(nullptr),
     m_parent(parent),
@@ -23,13 +23,12 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
     m_exitCode(0),
     m_selfSem(Semaphore(0)),
     m_spaceLock(Lock()),
-    m_mmap(nullptr)
+    m_mmap(nullptr),
+    m_tgid(m_pid),
+    m_fdTable(nullptr)
 {
     if (parent) {
-        for (int i = 0; i < MAX_FDS; i++) {
-            if (parent->m_fds[i])
-                m_fds[i] = new File(*parent->m_fds[i], true);
-        }
+        m_fdTable = fdTable ? fdTable : parent->m_fdTable->clone();
         m_cwdInode = parent->m_cwdInode;
         m_cwdPath  = kstrdup(parent->m_cwdPath, PATH_MAX);
     }
@@ -46,9 +45,12 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent) :
             USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
         m_cwdInode = 2;
         m_cwdPath  = kstrdup("/", PATH_MAX);
-        m_fds[0] = new File(UartInode::instance(), nullptr, File::O_RDONLY);
-        m_fds[1] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
-        m_fds[2] = new File(UartInode::instance(), nullptr, File::O_WRONLY);
+
+        m_fdTable = new FdTable();
+        m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_RDONLY));
+        m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_WRONLY));
+        m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_WRONLY));
+
         m_mmap = new Mmap(m_pmt, m_segTable);
     }
 }
@@ -60,10 +62,9 @@ void Process::clear() {
         delete t;
         t = next;
     }
-    for (auto& fd : m_fds) {
-        if (!fd) continue;
-        fd->close();
-        delete fd;
+    if (m_fdTable) {
+        m_fdTable->release();
+        m_fdTable = nullptr;
     }
     delete m_mmap;
     delete m_segTable;
@@ -112,7 +113,8 @@ Process* Process::fork() {
         return nullptr;
     }
 
-    auto child = new Process(pmt, -1, this);
+    FdTable* childFds = m_fdTable->clone();
+    auto child = new Process(pmt, -1, this, childFds);
     uint64_t childStackVa = USER_STACK_TOP -
         child->m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
         - USER_STACK_SIZE;
@@ -153,13 +155,7 @@ Process* Process::fork() {
 }
 
 File* Process::getFile(int fd) const {
-    if (fd < 0 || fd >= MAX_FDS) return nullptr;
-
-    m_lock.acquire();
-    File* f = m_fds[fd];
-    m_lock.release();
-
-    return f;
+    return m_fdTable ? m_fdTable->get(fd) : nullptr;
 }
 
 int Process::exec(const char* elfPath) {
@@ -269,40 +265,21 @@ uint64_t Process::brk(uint64_t newHeapEnd) const {
     return heapEnd;
 }
 
-uint64_t Process::openFile(const char* path, uint64_t flags) {
+uint64_t Process::openFile(const char* path, uint64_t flags) const {
     File* file = VFS::open(path, flags);
     if (!file) return -1;
 
-    m_lock.acquire();
-    for (int i = 0; i < MAX_FDS; i++) {
-        if (!m_fds[i]) {
-            m_fds[i] = file;
-            m_lock.release();
-            return i;
-        }
-    }
-    m_lock.release();
-
-    file->close();
-    delete file;
-    return -1;
-}
-
-int Process::closeFile(int fd) {
-    if (fd < 0 || fd >= MAX_FDS) return -1;
-
-    m_lock.acquire();
-    File* f = m_fds[fd];
-    if (!f) {
-        m_lock.release();
+    int fd = m_fdTable->alloc(file);
+    if (fd < 0) {
+        file->close();
+        delete file;
         return -1;
     }
-    m_fds[fd] = nullptr;
-    m_lock.release();
+    return fd;
+}
 
-    f->close();
-    delete f;
-    return 0;
+int Process::closeFile(int fd) const {
+    return m_fdTable ? m_fdTable->close(fd) : -1;
 }
 
 void Process::exit(int exitCode) {

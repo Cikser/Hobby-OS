@@ -1,10 +1,10 @@
 #ifndef RISC_V_PROCESS_H
 #define RISC_V_PROCESS_H
 
+#include "../../fs/fd_table.h"
 #include "../../mm/vm/mmap.h"
 #include "../sync/sem.h"
 #include "../pcb.h"
-#include "../../fs/file.h"
 
 class Thread;
 
@@ -34,8 +34,8 @@ public:
     Process* fork();
     File* getFile(int fd) const;
     uint64_t brk(uint64_t newHeapEnd) const;
-    uint64_t openFile(const char* path, uint64_t flags);
-    int closeFile(int fd);
+    uint64_t openFile(const char* path, uint64_t flags) const;
+    int closeFile(int fd) const;
     SegmentTable* segmentTable() const { return m_segTable; };
     void exit(int exitCode) override;
     pid_t wait(pid_t pid, int* status);
@@ -64,7 +64,8 @@ private:
     static KMemCache<Process>* s_cache;
     static Process* s_init;
 
-    Process(PMT* pmt, uint64_t entry, Process* parent);
+    Process(PMT* pmt, uint64_t entry, Process* parent,
+            FdTable* fdTable = nullptr);
 
     Thread* m_threads;
     Process* m_parent;
@@ -79,6 +80,8 @@ private:
     mutable Lock m_spaceLock;
     Mmap* m_mmap;
     bool m_reaped = false;
+    pid_t m_tgid;
+    FdTable* m_fdTable;
 };
 
 #endif

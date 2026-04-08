@@ -23,12 +23,14 @@ enum Syscall {
     SYS_SET_TID_ADDRESS = 96,
     SYS_FUTEX = 98,
     SYS_CLOCK_GETTIME = 113,
+    SYS_SCHED_YIELD = 124,
     SYS_UNAME = 160,
     SYS_GETPID = 172,
     SYS_GETUID = 174,
     SYS_GETEUID = 175,
     SYS_GETGID = 176,
     SYS_GETEGID = 177,
+    SYS_GETTID = 178,
     SYS_BRK = 214,
     SYS_MUNMAP = 215,
     SYS_FORK = 220,
@@ -73,6 +75,8 @@ private:
     static uint64_t sys_lseek(TrapFrame* tf);
     static uint64_t sys_unlinkat(TrapFrame* tf);
     static uint64_t sys_futex(TrapFrame* tf);
+    static uint64_t sys_sched_yield(TrapFrame* tf);
+    static uint64_t sys_gettid(TrapFrame* tf);
 };
 
 #endif

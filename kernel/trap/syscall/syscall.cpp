@@ -42,6 +42,8 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_LSEEK: tf->a0 = sys_lseek(tf); break;
     case SYS_UNLINKAT: tf->a0 = sys_unlinkat(tf); break;
     case SYS_FUTEX: tf->a0 = sys_futex(tf); break;
+    case SYS_SCHED_YIELD: tf->a0 = sys_sched_yield(tf); break;
+    case SYS_GETTID: tf->a0 = sys_gettid(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -66,7 +68,7 @@ static char* copyPathFromUser(uint64_t userAddr) {
 }
 
 uint64_t SyscallHandler::sys_getpid(TrapFrame* tf) {
-    return PCB::running()->pid();
+    return PCB::runningProcess()->pid();
 }
 
 uint64_t SyscallHandler::sys_exit(TrapFrame* tf) {
@@ -432,4 +434,13 @@ uint64_t SyscallHandler::sys_futex(TrapFrame* tf) {
         return (uint64_t)FUTEX_EINVAL;
 
     return (uint64_t)Futex::syscall(uaddr, op, val, timeout);
+}
+
+uint64_t SyscallHandler::sys_sched_yield(TrapFrame* tf) {
+    PCB::yield();
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_gettid(TrapFrame* tf) {
+    return PCB::running()->pid();
 }

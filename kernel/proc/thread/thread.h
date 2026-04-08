@@ -30,10 +30,14 @@ private:
     friend class Process;
     friend class PCBGarbage;
 
+    Thread(Process* parent, uint64_t entry, uint64_t userStack,
+           uint64_t tls, int* childTidPtr, int* clearTidPtr);
+
     static KMemCache<Thread>* s_cache;
 
     Process* m_parent;
     Thread* m_nextThread;
+    uint64_t m_clearTidAddr;
 };
 
 #endif

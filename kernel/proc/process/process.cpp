@@ -476,6 +476,28 @@ char* Process::cwd() const {
     return kstrdup(m_cwdPath ? m_cwdPath : "/", PATH_MAX);
 }
 
+Thread* Process::cloneThread(uint64_t entry, uint64_t userStack, uint64_t tls,
+    int* parentTidPtr, int* childTidPtr, int* clearTidPtr) {
+    auto* t = new Thread(this, entry, userStack, tls, childTidPtr, clearTidPtr);
+    if (!t) return nullptr;
+
+    if (parentTidPtr) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *parentTidPtr = (int)t->pid();
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+
+    m_fdTable->acquire();
+
+    m_lock.acquire();
+    t->m_nextThread = m_threads;
+    m_threads = t;
+    m_lock.release();
+    m_trapFrame->a0 = 0;
+
+    return t;
+}
+
 int Process::chdir(const char* path) {
     if (!path || path[0] == '\0') return -1;
 

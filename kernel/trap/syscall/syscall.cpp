@@ -9,12 +9,13 @@
 #include "../../fs/path_utils.h"
 #include "../../fs/vfs.h"
 #include "../../proc/sync/futex.h"
+#include "../../proc/thread/thread.h"
 
 void SyscallHandler::handle(TrapFrame* tf) {
     switch (tf->a7) {
     case SYS_EXIT: tf->a0 = sys_exit(tf); break;
     case SYS_GETPID: tf->a0 = sys_getpid(tf); break;
-    case SYS_FORK: tf->a0 = sys_fork(tf); break;
+    case SYS_CLONE: tf->a0 = sys_clone(tf); break;
     case SYS_EXECVE:  tf->a0 = sys_execve(tf); break;
     case SYS_WAIT4: tf->a0 = sys_wait4(tf); break;
     case SYS_READ: tf->a0 = sys_read(tf); break;
@@ -76,9 +77,42 @@ uint64_t SyscallHandler::sys_exit(TrapFrame* tf) {
     return 0;
 }
 
-uint64_t SyscallHandler::sys_fork(TrapFrame* tf) {
-    PCB* child = PCB::runningProcess()->fork();
-    return child ? child->pid() : -1;
+uint64_t SyscallHandler::sys_clone(TrapFrame* tf) {
+    uint64_t flags = tf->a0;
+    uint64_t childStack = tf->a1;
+    auto* parentTid = (int*)tf->a2;
+    uint64_t tls = tf->a3;
+    auto* childTid = (int*)tf->a4;
+
+    Process* proc = PCB::runningProcess();
+
+    if (flags & CLONE_THREAD) {
+        if (!(flags & CLONE_VM))    return (uint64_t)-1;
+        if (childStack == 0)        return (uint64_t)-1;
+
+        if (parentTid &&
+            !proc->checkOperation((uint64_t)parentTid, sizeof(int), SegmentDesc::SEG_W))
+            return (uint64_t)-1;
+
+        if (childTid &&
+            !proc->checkOperation((uint64_t)childTid, sizeof(int), SegmentDesc::SEG_W))
+            return (uint64_t)-1;
+
+        int* clearTid = (flags & CLONE_CHILD_CLEARTID) ? childTid : nullptr;
+
+        uint64_t entry = tf->sepc;
+
+        Thread* t = proc->cloneThread(entry, childStack, tls,
+                                       parentTid, childTid, clearTid);
+        if (!t) return (uint64_t)-1;
+
+        return t->pid();
+    }
+
+    Process* child = proc->fork();
+    if (!child) return (uint64_t)-1;
+
+    return child->pid();
 }
 
 uint64_t SyscallHandler::sys_write(TrapFrame* tf) {

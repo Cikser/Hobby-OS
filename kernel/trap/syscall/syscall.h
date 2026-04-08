@@ -33,7 +33,7 @@ enum Syscall {
     SYS_GETTID = 178,
     SYS_BRK = 214,
     SYS_MUNMAP = 215,
-    SYS_FORK = 220,
+    SYS_CLONE = 220,
     SYS_EXECVE = 221,
     SYS_MMAP = 222,
     SYS_MPROTECT = 226,
@@ -47,7 +47,7 @@ public:
 private:
     static uint64_t sys_exit(TrapFrame* tf);
     static uint64_t sys_getpid(TrapFrame* tf);
-    static uint64_t sys_fork(TrapFrame* tf);
+    static uint64_t sys_clone(TrapFrame* tf);
     static uint64_t sys_execve(TrapFrame* tf);
     static uint64_t sys_wait4(TrapFrame* tf);
     static uint64_t sys_read(TrapFrame* tf);

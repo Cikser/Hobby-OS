@@ -54,6 +54,7 @@ public:
     static Process* runningProcess() { return s_running->owner();}
     void setTidAddress(uint64_t addr) { m_tidAddress = addr; }
     uint64_t tidAddress() const { return m_tidAddress; }
+    pid_t tgid() const { return m_tgid; }
 
     virtual Process* owner() = 0;
     virtual bool isProcess() = 0;
@@ -92,6 +93,7 @@ protected:
     void* m_args;
     Semaphore m_waitSem;
     uint64_t m_tidAddress;
+    pid_t m_tgid;
     mutable Lock m_lock;
 
     static pid_t s_pid;

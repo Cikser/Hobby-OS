@@ -1,8 +1,8 @@
 #include "thread.h"
-
-#include "garbage.h"
-#include "riscv.h"
+#include "../garbage.h"
+#include "../../hw/riscv.h"
 #include "../../mm/vm/vm.h"
+#include "../sync/futex.h"
 
 KMemCache<Thread>* Thread::s_cache = nullptr;
 
@@ -33,20 +33,37 @@ Thread::Thread(Process* parent, uint64_t entry, void* args) :
 Thread::Thread(void (*entry)(void*), void* args) :
     PCB((uint64_t)entry, nullptr, false),
     m_parent(nullptr),
-    m_nextThread(nullptr)
+    m_nextThread(nullptr),
+    m_clearTidAddr(0)
 {
     m_args = args;
 }
 
-void Thread::clear() {
-    if (m_pmt) {
-        if (m_parent) m_parent->m_spaceLock.acquire();
+Thread::Thread(Process* parent, uint64_t entry, uint64_t userStack,
+               uint64_t tls, int* childTidPtr, int* clearTidPtr) :
+    PCB(entry, parent->m_pmt),
+    m_parent(parent),
+    m_nextThread(nullptr),
+    m_clearTidAddr((uint64_t)clearTidPtr)
+{
+    m_trapFrame->sepc = entry;
+    m_trapFrame->sp = userStack;
+    m_trapFrame->tp = tls;
+    if (childTidPtr) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *childTidPtr = (int)m_pid;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+    m_tgid = m_parent->m_pid;
+}
 
+void Thread::clear() {
+    if (m_pmt && m_ustack) {
+        if (m_parent) m_parent->m_spaceLock.acquire();
         m_pmt->unmapPages(
             USER_STACK_TOP - m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
                            - USER_STACK_SIZE,
             USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-
         if (m_parent) m_parent->m_spaceLock.release();
     }
     if (m_ustack)
@@ -56,6 +73,13 @@ void Thread::clear() {
 
 void Thread::exit(int exitCode) {
     m_lock.acquire();
+    if (m_clearTidAddr) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *(int*)m_clearTidAddr = 0;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+        Futex::syscall((uint32_t*)m_clearTidAddr, FUTEX_WAKE, ~0U, 0);
+    }
+
     if (m_tidAddress) {
         RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         *(int*)m_tidAddress = 0;

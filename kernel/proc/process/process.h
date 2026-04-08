@@ -26,6 +26,8 @@ public:
     Thread* createThread(void(*entry)(void*), void* args = nullptr);
     char* resolveRelative(const char* path) const;
     char* cwd() const;
+    Thread* cloneThread(uint64_t entry, uint64_t userStack, uint64_t tls,
+                    int* parentTidPtr, int* childTidPtr, int* clearTidPtr);
 
     Process* owner() override { return this; }
     bool isProcess() override { return true; }
@@ -52,7 +54,7 @@ public:
         if (addr > addr + len) return false;
         if (m_segTable->checkOperation(addr, addr + len, op)) return true;
         return m_mmap->checkOperation(addr, addr + len, op);
-    };
+    }
 
 private:
     friend class Thread;
@@ -80,8 +82,20 @@ private:
     mutable Lock m_spaceLock;
     Mmap* m_mmap;
     bool m_reaped = false;
-    pid_t m_tgid;
     FdTable* m_fdTable;
 };
+
+static constexpr uint64_t CSIGNAL = 0xFF;
+static constexpr uint64_t SIGCHLD = 17;
+
+static constexpr uint64_t CLONE_VM = 0x00000100;
+static constexpr uint64_t CLONE_FS = 0x00000200;
+static constexpr uint64_t CLONE_FILES = 0x00000400;
+static constexpr uint64_t CLONE_SIGHAND = 0x00000800;
+static constexpr uint64_t CLONE_THREAD = 0x00010000;
+static constexpr uint64_t CLONE_SETTLS = 0x00080000;
+static constexpr uint64_t CLONE_PARENT_SETTID = 0x00100000;
+static constexpr uint64_t CLONE_CHILD_CLEARTID = 0x00200000;
+static constexpr uint64_t CLONE_CHILD_SETTID = 0x01000000;
 
 #endif

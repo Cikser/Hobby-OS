@@ -90,3 +90,36 @@ void Scheduler::awake() {
 
     m_lock.release();
 }
+
+void Scheduler::wakeUp(PCB* pcb) {
+    m_lock.acquire();
+    PCB* cur = m_sleepHead, *prev = nullptr;
+
+    while (cur && cur != pcb) {
+        prev = cur;
+        cur = cur->m_nextSleep;
+    }
+
+    if (!cur) return;
+
+    if (!prev) {
+        m_sleepHead = m_sleepHead->m_nextSleep;
+        if (!m_sleepHead)
+            m_sleepTail = nullptr;
+        else
+            m_sleepHead->m_relativeSleepTime += pcb->m_relativeSleepTime;
+    }
+    else if (!cur->m_nextSleep) {
+        prev->m_nextSleep = nullptr;
+        m_sleepTail = prev;
+    }
+    else {
+        prev->m_nextSleep = cur->m_nextSleep;
+        cur->m_relativeSleepTime += pcb->m_relativeSleepTime;
+    }
+
+    pcb->m_nextSleep = nullptr;
+    pcb->m_relativeSleepTime = 0;
+
+    m_lock.release();
+}

@@ -60,9 +60,9 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
         }
         case PF_STORE: {
             if (VM::handleCowFault(stval)) break;
-            Console::kprintf("store page fault: sepc=0x%lx stval=0x%lx\n", sepc, stval);
-            PCB::runningProcess()->exit(-1);
-            break;
+            //Console::kprintf("store page fault: sepc=0x%lx stval=0x%lx\n", sepc, stval);
+            //PCB::runningProcess()->exit(-1);
+            //break;
         }
         default: {
             Console::kprintf("scause: 0x%lx\n", scause);

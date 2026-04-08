@@ -373,7 +373,7 @@ bool Mmap::checkOperation(uint64_t va_start, uint64_t va_end, uint32_t op) const
     while (va_start < va_end) {
         MmapRegion* desc = find(va_start);
         if (!desc) return false;
-        if (!(desc->flags & op)) return false;
+        if (!(desc->prot & op)) return false;
         va_start = desc->vaEnd;
     }
     return true;

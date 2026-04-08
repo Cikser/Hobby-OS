@@ -16,6 +16,7 @@ public:
     static bool emptySleep() { return m_sleepHead == nullptr; }
     static bool canAwake() { return m_sleepHead && m_sleepHead->m_relativeSleepTime == 0; }
     static void awake();
+    static void wakeUp(PCB* pcb);
 
 private:
     static ProcList* m_list;

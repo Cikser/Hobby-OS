@@ -1644,6 +1644,63 @@ static void test_concurrent_file_access(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  41. concurrent children sharing same file                          */
+/* ------------------------------------------------------------------ */
+
+static void test_futex(void) {
+    section("41. futex basic WAIT/WAKE");
+
+    uint32_t* futex_word = (uint32_t*)mmap(
+        (void*)0, 4096,
+        PROT_READ | PROT_WRITE,
+        MAP_SHARED | MAP_ANONYMOUS,
+        -1, 0
+    );
+    check(futex_word != MAP_FAILED, "mmap shared page for futex");
+    if (futex_word == MAP_FAILED) return;
+
+    *futex_word = 0;
+
+    pid_t child = fork();
+    if (child == 0) {
+        // Child: čeka dok futex_word == 0
+        long r = futex(futex_word, FUTEX_WAIT, 0, 0);
+        // Kad se probudi, word treba da je 1
+        exit(*futex_word == 1 ? 0 : 1);
+    }
+
+    // Parent: malo sačeka pa probudi child-a
+    // (bez sleep syscall-a, koristimo busy spin da damo child-u vremena da uđe u wait)
+    volatile long spin = 0;
+    for (long i = 0; i < 2000000L; i++) spin++;
+
+    *futex_word = 1;
+    long woken = futex(futex_word, FUTEX_WAKE, 1, 0);
+    check(woken == 1, "FUTEX_WAKE returns 1 (one waiter woken)");
+
+    int st = 0;
+    waitpid(child, &st);
+    check(st == 0, "child woke up and saw futex_word == 1");
+
+    // EAGAIN test: word je vec 1, WAIT sa val=0 treba da vrati EAGAIN odmah
+    long r = futex(futex_word, FUTEX_WAIT, 0, 0);
+    check(r == -11, "FUTEX_WAIT returns EAGAIN when *uaddr != val");
+
+    // WAKE bez waiter-a treba da vrati 0
+    long w = futex(futex_word, FUTEX_WAKE, 1, 0);
+    check(w == 0, "FUTEX_WAKE with no waiters returns 0");
+
+    // Bad pointer
+    long bad = futex((uint32_t*)0, FUTEX_WAIT, 0, 0);
+    check(bad == -22, "futex(NULL) returns EINVAL");
+
+    long bad2 = futex((uint32_t*)0x3, FUTEX_WAIT, 0, 0);
+    check(bad2 == -22, "futex(unaligned) returns EINVAL");
+
+    munmap(futex_word, 4096);
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -1696,6 +1753,7 @@ void _start() {
     test_string_ops();
     test_bad_pointers();
     test_concurrent_file_access();
+    test_futex();
 
     print_summary();
     exit(0);

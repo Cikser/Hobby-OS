@@ -66,6 +66,7 @@ int64_t Futex::wait(uint64_t physKey, uint32_t* uaddr, uint32_t val, time_t time
     s_lock.release();
 
     if (timeout > 0) {
+        me->setState(ProcState::SLEEPING);
         Scheduler::putSleep(me, timeout);
     }
 
@@ -102,7 +103,10 @@ int64_t Futex::wake(uint64_t physKey, uint32_t count) {
         PCB* pcb = q->waiters->get();
         if (!pcb) break;
 
-        pcb->setState(ProcState::READY);
+        if (pcb->state() == ProcState::SLEEPING)
+            Scheduler::wakeUp(pcb);
+        else
+            pcb->setState(ProcState::READY);
         s_lock.release();
         Scheduler::put(pcb);
         s_lock.acquire();

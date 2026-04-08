@@ -79,6 +79,14 @@ typedef void*              mmap_ptr_t;
 #define AT_FDCWD -100
 #define AT_REMOVEDIR 0x200
 
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+
+#define FUTEX_OK 0
+#define FUTEX_EAGAIN -11
+#define FUTEX_EINVAL -22
+#define FUTEX_ETIMEDOUT -110
+
 #define WIFEXITED(s)   (((s) & 0x7f) == 0)
 #define WEXITSTATUS(s) (((s) >> 8) & 0xff)
 

@@ -9,7 +9,8 @@ KMemCache<Thread>* Thread::s_cache = nullptr;
 Thread::Thread(Process* parent, uint64_t entry, void* args) :
     PCB(entry, parent->m_pmt),
     m_parent(parent),
-    m_nextThread(nullptr)
+    m_nextThread(nullptr),
+    m_clearTidAddr(0)
 {
     uint64_t stackTop = USER_STACK_TOP -
                         m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE);
@@ -49,6 +50,7 @@ Thread::Thread(Process* parent, uint64_t entry, uint64_t userStack,
     m_trapFrame->sepc = entry;
     m_trapFrame->sp = userStack;
     m_trapFrame->tp = tls;
+    m_trapFrame->a0 = 0;
     if (childTidPtr) {
         RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         *childTidPtr = (int)m_pid;
@@ -87,6 +89,20 @@ void Thread::exit(int exitCode) {
     }
     while (m_waitSem.waiting()) {
         m_waitSem.signal();
+    }
+    Thread* cur = m_parent->m_threads, *prev = nullptr;
+    while (cur && cur != this) {
+        prev = cur;
+        cur = cur->m_nextThread;
+    }
+    if (cur == this) {
+        if (!prev) {
+            m_parent->m_threads = m_parent->m_threads->m_nextThread;
+        }
+        else {
+            prev->m_nextThread = m_nextThread;
+        }
+        m_nextThread = nullptr;
     }
     m_state = ProcState::ZOMBIE;
     clear();

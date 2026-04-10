@@ -73,7 +73,7 @@ uint64_t SyscallHandler::sys_getpid(TrapFrame* tf) {
 }
 
 uint64_t SyscallHandler::sys_exit(TrapFrame* tf) {
-    PCB::runningProcess()->exit((int)(int64_t)tf->a0);
+    PCB::running()->exit((int)(int64_t)tf->a0);
     return 0;
 }
 

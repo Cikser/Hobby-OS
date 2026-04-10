@@ -24,9 +24,9 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
     m_selfSem(Semaphore(0)),
     m_spaceLock(Lock()),
     m_mmap(nullptr),
-    m_tgid(m_pid),
     m_fdTable(nullptr)
 {
+    m_tgid = m_pid;
     if (parent) {
         m_fdTable = fdTable ? fdTable : parent->m_fdTable->clone();
         m_cwdInode = parent->m_cwdInode;
@@ -59,7 +59,7 @@ void Process::clear() {
     Thread* t = m_threads;
     while (t) {
         Thread* next = t->m_nextThread;
-        delete t;
+        t->exit(0);
         t = next;
     }
     if (m_fdTable) {

@@ -1644,60 +1644,486 @@ static void test_concurrent_file_access(void) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  41. concurrent children sharing same file                          */
+/*  41. futex basic: WAIT/WAKE, EAGAIN, bad pointers                   */
 /* ------------------------------------------------------------------ */
 
-static void test_futex(void) {
-    section("41. futex basic WAIT/WAKE");
+static void test_futex_basic(void) {
+    section("41. futex — basic WAIT / WAKE");
 
-    uint32_t* futex_word = (uint32_t*)mmap(
-        (void*)0, 4096,
-        PROT_READ | PROT_WRITE,
-        MAP_SHARED | MAP_ANONYMOUS,
-        -1, 0
-    );
-    check(futex_word != MAP_FAILED, "mmap shared page for futex");
-    if (futex_word == MAP_FAILED) return;
-
-    *futex_word = 0;
+    uint32_t* fw = (uint32_t*)mmap((void*)0, 4096,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    check(fw != MAP_FAILED, "mmap shared futex word");
+    if (fw == MAP_FAILED) return;
+    *fw = 0;
 
     pid_t child = fork();
     if (child == 0) {
-        // Child: čeka dok futex_word == 0
-        long r = futex(futex_word, FUTEX_WAIT, 0, 0);
-        // Kad se probudi, word treba da je 1
-        exit(*futex_word == 1 ? 0 : 1);
+        long r = futex(fw, FUTEX_WAIT, 0, 0);
+        exit(*fw == 1 ? 0 : 1);
     }
 
-    // Parent: malo sačeka pa probudi child-a
-    // (bez sleep syscall-a, koristimo busy spin da damo child-u vremena da uđe u wait)
-    volatile long spin = 0;
-    for (long i = 0; i < 2000000L; i++) spin++;
+    volatile long s = 0;
+    for (long i = 0; i < 3000000L; i++) s++;
 
-    *futex_word = 1;
-    long woken = futex(futex_word, FUTEX_WAKE, 1, 0);
-    check(woken == 1, "FUTEX_WAKE returns 1 (one waiter woken)");
+    *fw = 1;
+    long woken = futex(fw, FUTEX_WAKE, 1, 0);
+    check(woken == 1, "FUTEX_WAKE returns 1 (one waiter)");
 
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "child woke up and saw futex_word == 1");
+    check(st == 0, "child woke correctly and saw *fw == 1");
 
-    // EAGAIN test: word je vec 1, WAIT sa val=0 treba da vrati EAGAIN odmah
-    long r = futex(futex_word, FUTEX_WAIT, 0, 0);
-    check(r == -11, "FUTEX_WAIT returns EAGAIN when *uaddr != val");
+    long r = futex(fw, FUTEX_WAIT, 0, 0);
+    check(r == FUTEX_EAGAIN, "FUTEX_WAIT returns EAGAIN when *uaddr != val");
 
-    // WAKE bez waiter-a treba da vrati 0
-    long w = futex(futex_word, FUTEX_WAKE, 1, 0);
+    long w = futex(fw, FUTEX_WAKE, 1, 0);
     check(w == 0, "FUTEX_WAKE with no waiters returns 0");
 
-    // Bad pointer
-    long bad = futex((uint32_t*)0, FUTEX_WAIT, 0, 0);
-    check(bad == -22, "futex(NULL) returns EINVAL");
+    check(futex((uint32_t*)0,   FUTEX_WAIT, 0, 0) == FUTEX_EINVAL,
+          "futex(NULL) → EINVAL");
+    check(futex((uint32_t*)0x3, FUTEX_WAIT, 0, 0) == FUTEX_EINVAL,
+          "futex(unaligned) → EINVAL");
+    check(futex((uint32_t*)-1L, FUTEX_WAIT, 0, 0) == FUTEX_EINVAL,
+          "futex(0xfff…) → EINVAL");
 
-    long bad2 = futex((uint32_t*)0x3, FUTEX_WAIT, 0, 0);
-    check(bad2 == -22, "futex(unaligned) returns EINVAL");
+    munmap(fw, 4096);
+}
 
-    munmap(futex_word, 4096);
+/* ------------------------------------------------------------------ */
+/*  42. futex: multiple waiters, wake-all, wake-N                      */
+/* ------------------------------------------------------------------ */
+
+static void test_futex_multi_wake(void) {
+    section("42. futex — multiple waiters");
+
+    uint32_t* fw = (uint32_t*)mmap((void*)0, 4096,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    check(fw != MAP_FAILED, "mmap shared futex word");
+    if (fw == MAP_FAILED) return;
+    *fw = 0;
+
+    uint32_t* counter = (uint32_t*)(fw + 1);
+    *counter = 0;
+
+    const int N = 4;
+    pid_t pids[4];
+    for (int i = 0; i < N; i++) {
+        pids[i] = fork();
+        if (pids[i] == 0) {
+            futex(fw, FUTEX_WAIT, 0, 0);
+            __sync_fetch_and_add(counter, 1);
+            exit(0);
+        }
+    }
+
+    volatile long sp = 0;
+    for (long i = 0; i < 5000000L; i++) sp++;
+
+    long w = futex(fw, FUTEX_WAKE, 2, 0);
+    check(w == 2, "FUTEX_WAKE(2) wakes exactly 2");
+
+    w = futex(fw, FUTEX_WAKE, ~0, 0);
+    check(w == 2, "FUTEX_WAKE(INT_MAX) wakes remaining 2");
+
+    for (int i = 0; i < N; i++) {
+        int st = 0;
+        waitpid(pids[i], &st);
+    }
+    check((int)*counter == N, "all 4 children incremented counter");
+
+    munmap(fw, 4096);
+}
+
+/* ------------------------------------------------------------------ */
+/*  43. futex: EAGAIN race — value changes before kernel queues us     */
+/* ------------------------------------------------------------------ */
+
+static void test_futex_eagain_race(void) {
+    section("43. futex — EAGAIN race window");
+
+    uint32_t* fw = (uint32_t*)mmap((void*)0, 4096,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    check(fw != MAP_FAILED, "mmap");
+    if (fw == MAP_FAILED) return;
+
+    *fw = 42;
+
+    long r = futex(fw, FUTEX_WAIT, 0, 0);
+    check(r == FUTEX_EAGAIN, "EAGAIN when val doesn't match on entry");
+
+    pid_t child = fork();
+    if (child == 0) {
+        long rc = futex(fw, FUTEX_WAIT, 42, 0);
+        exit(rc == 0 ? 0 : 1);
+    }
+
+    volatile long sp = 0;
+    for (long i = 0; i < 2000000L; i++) sp++;
+
+    *fw = 99;
+    futex(fw, FUTEX_WAKE, 1, 0);
+
+    int st = 0;
+    waitpid(child, &st);
+    check(st == 0, "child correctly waited on val==42 and was woken");
+
+    munmap(fw, 4096);
+}
+
+/* ------------------------------------------------------------------ */
+/*  44. clone: basic thread creation, gettid, getpid                   */
+/* ------------------------------------------------------------------ */
+
+static volatile int g_tid_child = 0;
+static volatile int g_tid_parent_view = 0;
+
+static void thread_record_tid(void* arg) {
+    int* out = (int*)arg;
+    *out = (int)gettid();
+    sched_yield();
+}
+
+static void test_clone_basic(void) {
+    section("44. clone — basic thread, gettid vs getpid");
+
+    uint32_t* jw = (uint32_t*)mmap((void*)0, 4096,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    check(jw != MAP_FAILED, "mmap join word");
+    if (jw == MAP_FAILED) return;
+    *jw = 1;
+
+    uint32_t* tid_out = (uint32_t*)(jw + 1);
+    *tid_out = 0;
+
+    thread_t t;
+    int r = thread_create(&t, thread_record_tid, (void*)tid_out);
+    check(r == 0, "thread_create succeeds");
+    if (r != 0) { munmap(jw, 4096); return; }
+
+    thread_join(&t);
+
+    check((int)*tid_out != 0,          "child TID was recorded");
+    check((int)*tid_out != (int)gettid(), "child TID != parent TID");
+
+    check(getpid() == gettid(),
+          "in main thread, getpid() == gettid()");
+
+    check(t.tid == (int)*tid_out, "parent-seen TID matches child-seen TID");
+
+    munmap(jw, 4096);
+}
+
+/* ------------------------------------------------------------------ */
+/*  45. clone: thread sees shared address space                         */
+/* ------------------------------------------------------------------ */
+
+static volatile uint32_t g_shared_var = 0;
+
+static void thread_write_shared(void* arg) {
+    (void)arg;
+    g_shared_var = 0xDEADBEEF;
+}
+
+static void test_clone_shared_memory(void) {
+    section("45. clone — shared address space (CLONE_VM)");
+
+    g_shared_var = 0;
+
+    thread_t t;
+    check(thread_create(&t, thread_write_shared, NULL) == 0,
+          "thread_create");
+    thread_join(&t);
+
+    check(g_shared_var == 0xDEADBEEF,
+          "parent sees thread's write to global variable");
+}
+
+/* ------------------------------------------------------------------ */
+/*  46. clone: shared fd table (CLONE_FILES)                            */
+/* ------------------------------------------------------------------ */
+
+static int   g_fd_shared  = -1;
+static char  g_fd_buf[16] = {0};
+
+static void thread_read_fd(void* arg) {
+    int n = (int)read(g_fd_shared, g_fd_buf, 5);
+    (void)n;
+}
+
+static void test_clone_shared_fds(void) {
+    section("46. clone — shared fd table (CLONE_FILES)");
+
+    int fd = open("/readme.txt", O_RDONLY);
+    check(fd >= 0, "open file for fd-sharing test");
+    if (fd < 0) return;
+    g_fd_shared = fd;
+
+    thread_t t;
+    check(thread_create(&t, thread_read_fd, NULL) == 0,
+          "thread_create for fd test");
+    thread_join(&t);
+
+    check(g_fd_buf[0] != 0, "thread successfully read from parent's fd");
+
+    close(fd);
+    g_fd_shared = -1;
+}
+
+static mutex_t  g_mutex       = MUTEX_INIT;
+static uint32_t g_mutex_count = 0;
+static uint32_t g_mutex_races = 0;
+
+static void thread_mutex_increment(void* arg) {
+    int iters = *(int*)arg;
+    for (int i = 0; i < iters; i++) {
+        mutex_lock(&g_mutex);
+        uint32_t v = g_mutex_count;
+        sched_yield();
+        g_mutex_count = v + 1;
+        mutex_unlock(&g_mutex);
+    }
+}
+
+static void test_mutex_basic(void) {
+    section("47. mutex — lock/unlock, no data races");
+
+    g_mutex_count = 0;
+    g_mutex_races = 0;
+    int iters = 200;
+
+    thread_t threads[4];
+    for (int i = 0; i < 4; i++) {
+        check(thread_create(&threads[i], thread_mutex_increment, &iters) == 0,
+              "create mutex-test thread");
+    }
+    for (int i = 0; i < 4; i++) thread_join(&threads[i]);
+
+    check((int)g_mutex_count == 4 * iters,
+          "mutex: final count == 4 * iters (no lost updates)");
+}
+
+/* ------------------------------------------------------------------ */
+/*  48. mutex: contention stress — many threads, many iterations        */
+/* ------------------------------------------------------------------ */
+
+static mutex_t  g_stress_mutex = MUTEX_INIT;
+static uint32_t g_stress_count = 0;
+
+static void thread_stress_lock(void* arg) {
+    int n = *(int*)arg;
+    for (int i = 0; i < n; i++) {
+        mutex_lock(&g_stress_mutex);
+        g_stress_count++;
+        mutex_unlock(&g_stress_mutex);
+    }
+}
+
+static void test_mutex_stress(void) {
+    section("48. mutex — contention stress");
+
+    g_stress_count = 0;
+    int iters = 500;
+    const int NT = 4;
+    thread_t tt[4];
+
+    for (int i = 0; i < NT; i++)
+        check(thread_create(&tt[i], thread_stress_lock, &iters) == 0,
+              "create stress thread");
+    for (int i = 0; i < NT; i++)
+        thread_join(&tt[i]);
+
+    check((int)g_stress_count == NT * iters,
+          "stress: count == NT * iters");
+}
+
+#define PIPE_LEN 16
+
+static sem_t    g_empty;
+static sem_t    g_full;
+static mutex_t  g_pipe_mutex = MUTEX_INIT;
+static int      g_pipe[PIPE_LEN];
+static int      g_pipe_head = 0;
+static int      g_pipe_tail = 0;
+static int      g_pipe_total_consumed = 0;
+
+#define PROD_ITEMS 64
+
+static void thread_producer(void* arg) {
+    for (int i = 0; i < PROD_ITEMS; i++) {
+        sem_wait(&g_empty);
+        mutex_lock(&g_pipe_mutex);
+        g_pipe[g_pipe_tail % PIPE_LEN] = i;
+        g_pipe_tail++;
+        mutex_unlock(&g_pipe_mutex);
+        sem_post(&g_full);
+    }
+}
+
+static void thread_consumer(void* arg) {
+    for (int i = 0; i < PROD_ITEMS; i++) {
+        sem_wait(&g_full);
+        mutex_lock(&g_pipe_mutex);
+        int v = g_pipe[g_pipe_head % PIPE_LEN];
+        g_pipe_head++;
+        g_pipe_total_consumed++;
+        mutex_unlock(&g_pipe_mutex);
+        sem_post(&g_empty);
+    }
+}
+
+static void test_semaphore_producer_consumer(void) {
+    section("49. semaphore — producer / consumer pipeline");
+
+    sem_init(&g_empty, PIPE_LEN);
+    sem_init(&g_full,  0);
+    g_pipe_head = g_pipe_tail = g_pipe_total_consumed = 0;
+
+    thread_t prod, cons;
+    check(thread_create(&prod, thread_producer, NULL) == 0, "create producer");
+    check(thread_create(&cons, thread_consumer, NULL) == 0, "create consumer");
+    thread_join(&prod);
+    thread_join(&cons);
+
+    check(g_pipe_total_consumed == PROD_ITEMS,
+          "consumer received all produced items");
+    check(g_pipe_head == g_pipe_tail,
+          "pipe is empty at end");
+}
+
+static sem_t    g_mc_empty;
+static sem_t    g_mc_full;
+static mutex_t  g_mc_mutex = MUTEX_INIT;
+static int      g_mc_produced = 0;
+static int      g_mc_consumed = 0;
+#define MC_ITEMS 50
+#define MC_PRODS 2
+#define MC_CONS  2
+
+static void thread_mc_producer(void* arg) {
+    for (int i = 0; i < MC_ITEMS; i++) {
+        sem_wait(&g_mc_empty);
+        mutex_lock(&g_mc_mutex);
+        g_mc_produced++;
+        mutex_unlock(&g_mc_mutex);
+        sem_post(&g_mc_full);
+    }
+}
+
+static void thread_mc_consumer(void* arg) {
+    for (int i = 0; i < MC_ITEMS; i++) {
+        sem_wait(&g_mc_full);
+        mutex_lock(&g_mc_mutex);
+        g_mc_consumed++;
+        mutex_unlock(&g_mc_mutex);
+        sem_post(&g_mc_empty);
+    }
+}
+
+static void test_semaphore_multi(void) {
+    section("50. semaphore — multi-producer multi-consumer");
+
+    sem_init(&g_mc_empty, PIPE_LEN);
+    sem_init(&g_mc_full,  0);
+    g_mc_produced = g_mc_consumed = 0;
+
+    thread_t prods[MC_PRODS], cons[MC_CONS];
+    for (int i = 0; i < MC_PRODS; i++)
+        check(thread_create(&prods[i], thread_mc_producer, NULL) == 0,
+              "create mc producer");
+    for (int i = 0; i < MC_CONS; i++)
+        check(thread_create(&cons[i],  thread_mc_consumer, NULL) == 0,
+              "create mc consumer");
+    for (int i = 0; i < MC_PRODS; i++) thread_join(&prods[i]);
+    for (int i = 0; i < MC_CONS;  i++) thread_join(&cons[i]);
+
+    check(g_mc_produced == MC_PRODS * MC_ITEMS, "total produced correct");
+    check(g_mc_consumed == MC_CONS  * MC_ITEMS, "total consumed correct");
+    check(g_mc_produced == g_mc_consumed,       "produced == consumed");
+}
+
+static volatile uint32_t g_tl_shared = 0;
+
+static void thread_tl_write(void* arg) {
+    volatile uint32_t local = 0xCAFEBABE;
+    g_tl_shared = 0xBEEFCAFE;
+    (void)local;
+    sched_yield();
+    if (local != 0xCAFEBABE) {
+        g_tl_shared = 0;
+    }
+}
+
+static void test_clone_thread_local(void) {
+    section("51. clone — stack isolation");
+
+    g_tl_shared = 0;
+
+    thread_t t;
+    check(thread_create(&t, thread_tl_write, NULL) == 0, "thread_create");
+    thread_join(&t);
+
+    check(g_tl_shared == 0xBEEFCAFE,
+          "parent sees thread's write to shared global");
+}
+
+#define BARRIER_N 4
+
+static uint32_t* g_barrier_fw  = (uint32_t*)0;
+static uint32_t  g_barrier_cnt = 0;
+static mutex_t   g_barrier_mutex = MUTEX_INIT;
+static uint32_t  g_barrier_phase = 0;
+
+static void thread_barrier(void* arg) {
+    int rounds = *(int*)arg;
+    for (int r = 0; r < rounds; r++) {
+        mutex_lock(&g_barrier_mutex);
+        g_barrier_cnt++;
+        uint32_t phase = g_barrier_phase;
+        int last = (g_barrier_cnt % BARRIER_N == 0);
+        if (last) {
+            g_barrier_phase++;
+            mutex_unlock(&g_barrier_mutex);
+            futex(g_barrier_fw, FUTEX_WAKE, ~0, 0);
+        } else {
+            mutex_unlock(&g_barrier_mutex);
+            /* Wait for phase to advance.                              */
+            while (g_barrier_phase == phase)
+                futex(g_barrier_fw, FUTEX_WAIT, phase, 0);
+        }
+    }
+}
+
+static void test_clone_futex_barrier(void) {
+    section("52. clone + futex — N-thread barrier");
+
+    g_barrier_fw = (uint32_t*)mmap((void*)0, 4096,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    check(g_barrier_fw != MAP_FAILED, "mmap barrier futex word");
+    if (g_barrier_fw == MAP_FAILED) return;
+
+    *g_barrier_fw = 0;
+    g_barrier_cnt  = 0;
+    g_barrier_phase = 0;
+
+    int rounds = 3;
+    thread_t threads[BARRIER_N];
+    for (int i = 0; i < BARRIER_N; i++)
+        check(thread_create(&threads[i], thread_barrier, &rounds) == 0,
+              "create barrier thread");
+    for (int i = 0; i < BARRIER_N; i++)
+        thread_join(&threads[i]);
+
+    check((int)g_barrier_phase == rounds,
+          "barrier completed all rounds");
+    check((int)g_barrier_cnt   == BARRIER_N * rounds,
+          "all threads participated in every round");
+
+    munmap(g_barrier_fw, 4096);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1753,7 +2179,18 @@ void _start() {
     test_string_ops();
     test_bad_pointers();
     test_concurrent_file_access();
-    test_futex();
+    test_futex_basic();
+    test_futex_multi_wake();
+    test_futex_eagain_race();
+    test_clone_basic();
+    test_clone_shared_memory();
+    test_clone_shared_fds();
+    test_mutex_basic();
+    test_mutex_stress();
+    test_semaphore_producer_consumer();
+    test_semaphore_multi();
+    test_clone_thread_local();
+    test_clone_futex_barrier();
 
     print_summary();
     exit(0);

@@ -31,15 +31,17 @@ typedef void*              mmap_ptr_t;
 #define SYS_SET_TID_ADDRESS 96
 #define SYS_FUTEX           98
 #define SYS_CLOCK_GETTIME   113
+#define SYS_SCHED_YIELD     124
 #define SYS_UNAME           160
 #define SYS_GETPID          172
 #define SYS_GETUID          174
 #define SYS_GETEUID         175
 #define SYS_GETGID          176
 #define SYS_GETEGID         177
+#define SYS_GETTID          178
 #define SYS_BRK             214
 #define SYS_MUNMAP          215
-#define SYS_FORK            220
+#define SYS_CLONE           220
 #define SYS_EXECVE          221
 #define SYS_MMAP            222
 #define SYS_MPROTECT        226
@@ -87,6 +89,16 @@ typedef void*              mmap_ptr_t;
 #define FUTEX_EINVAL -22
 #define FUTEX_ETIMEDOUT -110
 
+#define CLONE_VM               0x00000100
+#define CLONE_FS               0x00000200
+#define CLONE_FILES            0x00000400
+#define CLONE_SIGHAND          0x00000800
+#define CLONE_THREAD           0x00010000
+#define CLONE_SETTLS           0x00080000
+#define CLONE_PARENT_SETTID    0x00100000
+#define CLONE_CHILD_CLEARTID   0x00200000
+#define CLONE_CHILD_SETTID     0x01000000
+
 #define WIFEXITED(s)   (((s) & 0x7f) == 0)
 #define WEXITSTATUS(s) (((s) >> 8) & 0xff)
 
@@ -117,6 +129,8 @@ static inline long __syscall(long num,
 #define _SC4(n,a,b,c,d)     __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),0,0)
 #define _SC5(n,a,b,c,d,e)   __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),(long)(e),0)
 #define _SC6(n,a,b,c,d,e,f) __syscall((n),(long)(a),(long)(b),(long)(c),(long)(d),(long)(e),(long)(f))
+
+static void printf(const char* fmt, ...);
 
 struct stat {
     uint64_t st_dev;
@@ -187,7 +201,7 @@ static inline uint32_t getegid(void) {
 }
 
 static inline pid_t fork(void) {
-    return (pid_t)_SC0(SYS_FORK);
+    return (pid_t)_SC4(SYS_CLONE, 0, 0, 0, 0);
 }
 
 static inline pid_t wait4(pid_t pid, int* status, int flags) {
@@ -295,6 +309,168 @@ static inline long futex(uint32_t* uaddr, int op, uint32_t val,
                             unsigned long timeout_ticks) {
       return __syscall(SYS_FUTEX, (long)uaddr, (long)op,
                        (long)val, (long)timeout_ticks, 0, 0);
+}
+
+static inline pid_t gettid() {
+    return _SC0(SYS_GETTID);
+}
+
+static inline int sched_yield() {
+    return _SC0(SYS_SCHED_YIELD);
+}
+
+#define STACK_SIZE (4096 * 4)
+
+__attribute__((noinline))
+static long __clone_impl(unsigned long flags,
+                          void*         child_sp,
+                          int*          ptid,
+                          unsigned long tls,
+                          int*          ctid)
+{
+    register long a0 __asm__("a0") = (long)flags;
+    register long a1 __asm__("a1") = (long)child_sp;
+    register long a2 __asm__("a2") = (long)ptid;
+    register long a3 __asm__("a3") = (long)tls;
+    register long a4 __asm__("a4") = (long)ctid;
+    register long a7 __asm__("a7") = 220;
+
+    __asm__ volatile (
+        "ecall\n"
+
+        "bnez  a0, 1f\n"
+
+        "ld    t0,  0(sp)\n"
+        "ld    a0,  8(sp)\n"
+        "addi  sp, sp, 16\n"
+
+        "jalr  t0\n"
+
+        "ld    t0,  0(sp)\n"
+        "sw    zero, 0(t0)\n"
+        "mv    a0,  t0\n"
+        "li    a1,  1\n"
+        "li    a2,  0x7fffffff\n"
+        "li    a3,  0\n"
+        "li    a4,  0\n"
+        "li    a5,  0\n"
+        "li    a7,  98\n"
+        "ecall\n"
+
+        "li    a0,  0\n"
+        "li    a7,  93\n"
+        "ecall\n"
+        "j     .\n"
+
+        "1:\n"
+
+        : "+r"(a0)
+        : "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a7)
+        : "t0", "a5", "memory"
+    );
+
+    return a0;
+}
+
+
+typedef struct {
+    int       tid;
+    uint32_t* join_word;
+    void*     stack_base;
+} thread_t;
+
+typedef void(*thread_func_t)(void*);
+
+static inline int thread_create(thread_t* t, thread_func_t func, void* arg) {
+    void* stack = mmap((void*)0, STACK_SIZE,
+                           PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (stack == MAP_FAILED) return -1;
+
+    uint32_t* jw = (uint32_t*)mmap((void*)0, 4096,
+                                    PROT_READ | PROT_WRITE,
+                                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (jw == MAP_FAILED) { munmap(stack, STACK_SIZE); return -1; }
+    *jw = 1;
+
+    t->stack_base = stack;
+    t->join_word  = jw;
+
+    uint64_t top   = ((uint64_t)stack + STACK_SIZE) & ~0xFULL;
+    uint64_t* slot = (uint64_t*)(top - 32);
+    slot[0] = (uint64_t)func;
+    slot[1] = (uint64_t)arg;
+    slot[2] = (uint64_t)jw;
+    slot[3] = 0;
+    void* child_sp = (void*)(top - 32);
+
+    int parent_tid = 0;
+    int child_tid  = 0;
+
+    unsigned long flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND
+                        | CLONE_THREAD | CLONE_SETTLS
+                        | CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID
+                        | CLONE_CHILD_SETTID;
+
+    long ret = __clone_impl(flags, child_sp, &parent_tid, 0, &child_tid);
+    if (ret < 0) {
+        munmap(stack, STACK_SIZE);
+        munmap(jw, 4096);
+        return -1;
+    }
+
+    t->tid = (int)ret;
+    return 0;
+}
+
+static inline int thread_join(thread_t* t) {
+    uint32_t v;
+    while ((v = *t->join_word) != 0) {
+        futex(t->join_word, FUTEX_WAIT, v, 0);
+    }
+    munmap(t->stack_base, STACK_SIZE);
+    munmap(t->join_word, 4096);
+    return 0;
+}
+
+typedef struct { uint32_t state; } mutex_t;
+#define MUTEX_INIT { 0 }
+
+static inline void mutex_lock(mutex_t* m) {
+    uint32_t c = __sync_val_compare_and_swap(&m->state, 0, 1);
+    if (c == 0) return;
+
+    do {
+        if (c == 2 || __sync_val_compare_and_swap(&m->state, 1, 2) != 0)
+            futex(&m->state, FUTEX_WAIT, 2, 0);
+        c = __sync_val_compare_and_swap(&m->state, 0, 2);
+    } while (c != 0);
+}
+
+static inline void mutex_unlock(mutex_t* m) {
+    uint32_t old = __sync_fetch_and_sub(&m->state, 1);
+    if (old != 1) {
+        __sync_lock_release(&m->state);
+        futex(&m->state, FUTEX_WAKE, 1, 0);
+    }
+}
+
+typedef struct { uint32_t count; } sem_t;
+
+static inline void sem_init(sem_t* s, uint32_t val) { s->count = val; }
+
+static inline void sem_wait(sem_t* s) {
+    while (1) {
+        uint32_t c = s->count;
+        if (c > 0 && __sync_bool_compare_and_swap(&s->count, c, c-1))
+            return;
+        futex(&s->count, FUTEX_WAIT, c, 0);
+    }
+}
+
+static inline void sem_post(sem_t* s) {
+    __sync_fetch_and_add(&s->count, 1);
+    futex(&s->count, FUTEX_WAKE, 1, 0);
 }
 
 static inline size_t strlen(const char* s) {

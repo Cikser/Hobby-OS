@@ -2127,6 +2127,545 @@ static void test_clone_futex_barrier(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  53. nanosleep                                                       */
+/* ------------------------------------------------------------------ */
+
+static void test_nanosleep(void) {
+    section("53. nanosleep");
+
+    struct timespec req = { 0, 10 * 1000000 };
+    int r = nanosleep(&req, (struct timespec*)0);
+    check(r == 0, "nanosleep 10ms returns 0");
+
+    struct timespec zero = { 0, 0 };
+    r = nanosleep(&zero, (struct timespec*)0);
+    check(r == 0, "nanosleep 0 returns 0");
+
+    struct timespec rem = { 99, 99 };
+    req.tv_sec = 0; req.tv_nsec = 5 * 1000000;
+    r = nanosleep(&req, &rem);
+    check(r == 0, "nanosleep with rem ptr returns 0");
+    check(rem.tv_sec == 0 && rem.tv_nsec == 0, "rem is zero after normal completion");
+
+    struct timespec bad = { 0, -1 };
+    r = nanosleep(&bad, (struct timespec*)0);
+    check(r < 0, "nanosleep negative nsec fails");
+
+    bad.tv_nsec = 1000000000LL;
+    r = nanosleep(&bad, (struct timespec*)0);
+    check(r < 0, "nanosleep nsec>=1e9 fails");
+
+    r = nanosleep((struct timespec*)0, (struct timespec*)0);
+    check(r < 0, "nanosleep NULL req fails");
+
+    struct timespec t1, t2;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    req.tv_sec = 0; req.tv_nsec = 20 * 1000000;
+    nanosleep(&req, (struct timespec*)0);
+    clock_gettime(CLOCK_MONOTONIC, &t2);
+    uint64_t ms1 = (uint64_t)t1.tv_sec * 1000 + t1.tv_nsec / 1000000;
+    uint64_t ms2 = (uint64_t)t2.tv_sec * 1000 + t2.tv_nsec / 1000000;
+    check(ms2 >= ms1 + 10, "time advanced by at least 10ms after 20ms nanosleep");
+}
+
+/* ------------------------------------------------------------------ */
+/*  54. clock_getres                                                    */
+/* ------------------------------------------------------------------ */
+
+static void test_clock_getres(void) {
+    section("54. clock_getres");
+
+    struct timespec res;
+
+    int r = clock_getres(CLOCK_MONOTONIC, &res);
+    check(r == 0, "clock_getres CLOCK_MONOTONIC returns 0");
+    check(res.tv_sec == 0, "resolution tv_sec == 0");
+    check(res.tv_nsec > 0, "resolution tv_nsec > 0");
+    check(res.tv_nsec <= 1000000000LL, "resolution tv_nsec <= 1s");
+    printf("    CLOCK_MONOTONIC resolution: %ld ns\n", (long)res.tv_nsec);
+
+    r = clock_getres(CLOCK_REALTIME, &res);
+    check(r == 0, "clock_getres CLOCK_REALTIME returns 0");
+
+    r = clock_getres(CLOCK_MONOTONIC, (struct timespec*)0);
+    check(r == 0, "clock_getres NULL res returns 0 (clock exists check)");
+
+    r = clock_getres(CLOCK_MONOTONIC, (struct timespec*)0x10);
+    check(r < 0, "clock_getres bad ptr fails");
+}
+
+/* ------------------------------------------------------------------ */
+/*  55. getppid                                                         */
+/* ------------------------------------------------------------------ */
+
+static void test_getppid(void) {
+    section("55. getppid");
+
+    pid_t ppid = getppid();
+    check(ppid >= 0, "getppid returns non-negative");
+
+    if (getpid() == 1) {
+        check(ppid == 0 || ppid == 1, "init ppid is 0 or 1");
+    }
+
+    pid_t parent = getpid();
+    pid_t child = fork();
+    if (child == 0) {
+        pid_t child_ppid = getppid();
+        exit(child_ppid == parent ? 0 : 1);
+    }
+    int st = 0;
+    waitpid(child, &st);
+    check(st == 0, "child getppid == parent getpid");
+
+    check(getppid() != getpid(), "ppid != pid");
+}
+
+/* ------------------------------------------------------------------ */
+/*  56. gettimeofday                                                    */
+/* ------------------------------------------------------------------ */
+
+static void test_gettimeofday(void) {
+    section("56. gettimeofday");
+
+    struct timeval tv;
+    int r = gettimeofday(&tv, (void*)0);
+    check(r == 0, "gettimeofday returns 0");
+    check(tv.tv_sec >= 0, "tv_sec non-negative");
+    check(tv.tv_usec >= 0 && tv.tv_usec < 1000000, "tv_usec in [0, 1e6)");
+    printf("    gettimeofday: sec=%ld usec=%ld\n", (long)tv.tv_sec, (long)tv.tv_usec);
+
+    r = gettimeofday((struct timeval*)0, (void*)0);
+    check(r == 0, "gettimeofday NULL tv returns 0");
+
+    r = gettimeofday((struct timeval*)0x8, (void*)0);
+    check(r < 0, "gettimeofday bad ptr fails");
+
+    struct timeval tv2;
+    gettimeofday(&tv, (void*)0);
+    volatile long spin = 0;
+    for (long i = 0; i < 2000000L; i++) spin++;
+    gettimeofday(&tv2, (void*)0);
+    uint64_t us1 = (uint64_t)tv.tv_sec  * 1000000 + (uint64_t)tv.tv_usec;
+    uint64_t us2 = (uint64_t)tv2.tv_sec * 1000000 + (uint64_t)tv2.tv_usec;
+    check(us2 >= us1, "gettimeofday is non-decreasing");
+
+    struct timespec ts;
+    gettimeofday(&tv, (void*)0);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    check(tv.tv_sec >= 0 && ts.tv_sec >= 0, "gettimeofday and clock_gettime both work");
+}
+
+/* ------------------------------------------------------------------ */
+/*  57. getrusage                                                       */
+/* ------------------------------------------------------------------ */
+
+static void test_getrusage(void) {
+    section("57. getrusage");
+
+    struct rusage ru;
+    int r = getrusage(RUSAGE_SELF, &ru);
+    check(r == 0, "getrusage RUSAGE_SELF returns 0");
+    check(ru.ru_utime.tv_sec >= 0, "ru_utime.tv_sec non-negative");
+    check(ru.ru_stime.tv_sec >= 0, "ru_stime.tv_sec non-negative");
+
+    r = getrusage(RUSAGE_CHILDREN, &ru);
+    check(r == 0, "getrusage RUSAGE_CHILDREN returns 0");
+
+    r = getrusage(RUSAGE_SELF, (struct rusage*)0);
+    check(r < 0, "getrusage NULL fails");
+
+    r = getrusage(RUSAGE_SELF, (struct rusage*)0x10);
+    check(r < 0, "getrusage bad ptr fails");
+}
+
+/* ------------------------------------------------------------------ */
+/*  58. umask                                                           */
+/* ------------------------------------------------------------------ */
+
+static void test_umask(void) {
+    section("58. umask");
+
+    uint32_t old = umask(022);
+    check(old <= 0777u, "umask returns valid old mask");
+
+    uint32_t cur = umask(022);
+    check(cur == 022, "umask(022) round-trip");
+
+    uint32_t prev = umask(077);
+    check(prev == 022, "umask previous value correct after change");
+
+    umask(old);
+    uint32_t restored = umask(old);
+    check(restored == old, "umask restored to original");
+}
+
+/* ------------------------------------------------------------------ */
+/*  59. fcntl                                                           */
+/* ------------------------------------------------------------------ */
+
+static void test_fcntl(void) {
+    section("59. fcntl");
+
+    int fd = open("/readme.txt", O_RDONLY);
+    check(fd >= 0, "open file for fcntl test");
+    if (fd < 0) return;
+
+    int r = fcntl(fd, F_GETFD, 0);
+    check(r >= 0, "F_GETFD returns >= 0");
+
+    r = fcntl(fd, F_SETFD, FD_CLOEXEC);
+    check(r == 0, "F_SETFD FD_CLOEXEC returns 0");
+
+    r = fcntl(fd, F_GETFL, 0);
+    check(r >= 0, "F_GETFL returns >= 0");
+
+    r = fcntl(fd, F_SETFL, 0);
+    check(r == 0, "F_SETFL returns 0");
+
+    int fd2 = fcntl(fd, F_DUPFD, 0);
+    check(fd2 >= 0, "F_DUPFD returns valid fd");
+    check(fd2 != fd, "F_DUPFD returns different fd");
+    if (fd2 >= 0) {
+        char buf[4];
+        ssize_t n = read(fd2, buf, 1);
+        check(n >= 0, "F_DUPFD result fd is readable");
+        close(fd2);
+    }
+
+    r = fcntl(-1, F_GETFD, 0);
+    check(r < 0, "fcntl on bad fd fails");
+
+    r = fcntl(999, F_GETFD, 0);
+    check(r < 0, "fcntl on oob fd fails");
+
+    close(fd);
+}
+
+/* ------------------------------------------------------------------ */
+/*  60. dup / dup2                                                      */
+/* ------------------------------------------------------------------ */
+
+static void test_dup_dup2(void) {
+    section("60. dup / dup2");
+
+    int fd = open("/readme.txt", O_RDONLY);
+    check(fd >= 0, "open for dup test");
+    if (fd < 0) return;
+
+    int fd2 = dup(fd);
+    check(fd2 >= 0, "dup returns valid fd");
+    check(fd2 != fd, "dup returns different fd");
+
+    if (fd2 >= 0) {
+        char b1[8], b2[8];
+        lseek(fd,  0, SEEK_SET);
+        lseek(fd2, 0, SEEK_SET);
+        read(fd,  b1, 4);
+        read(fd2, b2, 4);
+        check(memcmp(b1, b2, 4) == 0, "dup fd reads same content");
+        close(fd2);
+    }
+
+    check(dup(-1) < 0, "dup(-1) fails");
+    check(dup(999) < 0, "dup(999) fails");
+
+    int fd3 = open("/readme.txt", O_RDONLY);
+    check(fd3 >= 0, "second open for dup2 test");
+    if (fd3 >= 0) {
+        int target = fd3 + 1;
+        close(target);
+
+        int r = dup2(fd, target);
+        check(r == target, "dup2 returns target fd");
+        if (r == target) {
+            char buf[4];
+            lseek(target, 0, SEEK_SET);
+            ssize_t n = read(target, buf, 4);
+            check(n > 0, "dup2 target fd is readable");
+            close(target);
+        }
+        close(fd3);
+    }
+
+    check(dup2(fd, fd) < 0, "dup2 oldfd==newfd fails");
+
+    close(fd);
+}
+
+/* ------------------------------------------------------------------ */
+/*  61. pread / pwrite                                                  */
+/* ------------------------------------------------------------------ */
+
+static void test_pread_pwrite(void) {
+    section("61. pread / pwrite");
+
+    int fd = open("/preadwrite_test.txt", O_RDWR | O_CREAT | O_TRUNC);
+    check(fd >= 0, "create file for pread/pwrite test");
+    if (fd < 0) return;
+
+    const char* data = "ABCDEFGHIJ";
+    ssize_t w = pwrite(fd, data, 10, 0);
+    check(w == 10, "pwrite 10 bytes at offset 0");
+
+    w = pwrite(fd, "KLMNOP", 6, 10);
+    check(w == 6, "pwrite 6 bytes at offset 10");
+
+    int64_t pos = lseek(fd, 0, SEEK_CUR);
+    check(pos == 0, "file position unchanged after pwrite");
+
+    char buf[16];
+    ssize_t r = pread(fd, buf, 10, 0);
+    check(r == 10, "pread 10 bytes from offset 0");
+    check(memcmp(buf, "ABCDEFGHIJ", 10) == 0, "pread data matches pwrite at offset 0");
+
+    r = pread(fd, buf, 6, 10);
+    check(r == 6, "pread 6 bytes from offset 10");
+    check(memcmp(buf, "KLMNOP", 6) == 0, "pread data matches pwrite at offset 10");
+
+    pos = lseek(fd, 0, SEEK_CUR);
+    check(pos == 0, "file position unchanged after pread");
+
+    lseek(fd, 5, SEEK_SET);
+    pread(fd, buf, 4, 2);
+    pos = lseek(fd, 0, SEEK_CUR);
+    check(pos == 5, "pread does not change seeked position");
+
+    r = pread(fd, buf, 4, -1);
+    check(r < 0, "pread negative offset fails");
+
+    w = pwrite(fd, "X", 1, -1);
+    check(w < 0, "pwrite negative offset fails");
+
+    r = pread(-1, buf, 4, 0);
+    check(r < 0, "pread bad fd fails");
+
+    w = pwrite(-1, "X", 1, 0);
+    check(w < 0, "pwrite bad fd fails");
+
+    r = pread(fd, (void*)0, 4, 0);
+    check(r < 0, "pread NULL buf fails");
+
+    close(fd);
+    unlink("/preadwrite_test.txt");
+}
+
+/* ------------------------------------------------------------------ */
+/*  62. ftruncate                                                       */
+/* ------------------------------------------------------------------ */
+
+static void test_ftruncate(void) {
+    section("62. ftruncate");
+
+    int fd = open("/trunc_test.txt", O_RDWR | O_CREAT | O_TRUNC);
+    check(fd >= 0, "create file for ftruncate test");
+    if (fd < 0) return;
+
+    write(fd, "Hello, World!", 13);
+
+    struct stat st;
+    fstat(fd, &st);
+    check(st.st_size == 13, "initial size == 13");
+
+    int r = ftruncate(fd, 0);
+    check(r == 0, "ftruncate to 0 returns 0");
+
+    fstat(fd, &st);
+    check(st.st_size == 0, "size == 0 after ftruncate(0)");
+
+    lseek(fd, 0, SEEK_SET);
+    char buf[8];
+    ssize_t n = read(fd, buf, 8);
+    check(n <= 0, "read after truncate returns EOF");
+
+    lseek(fd, 0, SEEK_SET);
+    write(fd, "XXXXXXXX", 8);
+    fstat(fd, &st);
+    check(st.st_size == 8, "size == 8 after write");
+
+    r = ftruncate(fd, 0);
+    check(r == 0, "second ftruncate(0) returns 0");
+    fstat(fd, &st);
+    check(st.st_size == 0, "size == 0 after second ftruncate");
+
+    r = ftruncate(fd, -1);
+    check(r < 0, "ftruncate negative length fails");
+
+    r = ftruncate(-1, 0);
+    check(r < 0, "ftruncate bad fd fails");
+
+    close(fd);
+    unlink("/trunc_test.txt");
+}
+
+/* ------------------------------------------------------------------ */
+/*  63. readlink                                                        */
+/* ------------------------------------------------------------------ */
+
+static void test_readlink(void) {
+    section("63. readlink");
+
+    char buf[256];
+    ssize_t r = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    check(r > 0, "readlink /proc/self/exe returns > 0 bytes");
+    if (r > 0) {
+        buf[r] = '\0';
+        check(buf[0] == '/', "readlink result starts with /");
+        printf("    /proc/self/exe -> %s\n", buf);
+    }
+
+    char small[4];
+    r = readlink("/proc/self/exe", small, sizeof(small));
+    check(r == (ssize_t)sizeof(small), "readlink truncates to bufsize");
+
+    r = readlink("/nonexistent_link_xyz", buf, sizeof(buf));
+    check(r < 0, "readlink nonexistent fails");
+
+    r = readlink((const char*)0, buf, sizeof(buf));
+    check(r < 0, "readlink NULL path fails");
+
+    r = readlink("/proc/self/exe", (char*)0, 10);
+    check(r < 0, "readlink NULL buf fails");
+
+    r = readlink("/proc/self/exe", buf, 0);
+    check(r < 0, "readlink bufsize=0 fails");
+}
+
+/* ------------------------------------------------------------------ */
+/*  64. newfstatat                                                      */
+/* ------------------------------------------------------------------ */
+
+static void test_newfstatat(void) {
+    section("64. newfstatat / stat");
+
+    struct stat st;
+    int r = stat("/readme.txt", &st);
+    check(r == 0, "stat /readme.txt returns 0");
+    check(st.st_size > 0, "stat st_size > 0");
+    check(st.st_ino > 0,  "stat st_ino > 0");
+
+    uint64_t readme_ino = st.st_ino;
+
+    struct stat st_dir;
+    r = stat("/", &st_dir);
+    check(r == 0, "stat / returns 0");
+    check((st_dir.st_mode & 0xF000) == 0x4000, "stat / mode is dir");
+
+    struct stat st_bad;
+    r = stat("/no_such_file_xyz.txt", &st_bad);
+    check(r < 0, "stat nonexistent fails");
+
+    r = newfstatat(AT_FDCWD, "readme.txt", &st, 0);
+    check(r == 0 || r < 0, "newfstatat AT_FDCWD does not crash");
+
+    int fd = open("/readme.txt", O_RDONLY);
+    check(fd >= 0, "open for AT_EMPTY_PATH test");
+    if (fd >= 0) {
+        struct stat st2;
+        r = newfstatat(fd, "", &st2, AT_EMPTY_PATH);
+        check(r == 0, "newfstatat AT_EMPTY_PATH on fd returns 0");
+        check(st2.st_ino == readme_ino, "AT_EMPTY_PATH ino matches readme.txt ino");
+        close(fd);
+    }
+
+    r = stat("/readme.txt", (struct stat*)0);
+    check(r < 0, "stat NULL statbuf fails");
+
+    r = stat("/readme.txt", (struct stat*)0x10);
+    check(r < 0, "stat bad statbuf fails");
+
+    r = stat((const char*)0, &st);
+    check(r < 0, "stat NULL path fails");
+}
+
+/* ------------------------------------------------------------------ */
+/*  65. getdents64                                                      */
+/* ------------------------------------------------------------------ */
+
+static void test_getdents64(void) {
+    section("65. getdents64");
+
+    int fd = open("/", O_RDONLY);
+    check(fd >= 0, "open / for getdents64");
+    if (fd < 0) return;
+
+    char buf[2048];
+    ssize_t r = getdents64(fd, (struct linux_dirent64*)buf, sizeof(buf));
+    check(r > 0, "getdents64 / returns > 0 bytes");
+
+    int count = 0;
+    int found_readme = 0;
+    ssize_t pos = 0;
+    while (pos < r) {
+        struct linux_dirent64* d = (struct linux_dirent64*)(buf + pos);
+        if (d->d_reclen == 0) break;
+        if (strcmp(d->d_name, "readme.txt") == 0) found_readme = 1;
+        count++;
+        pos += d->d_reclen;
+    }
+    check(count > 0, "getdents64 returned at least one entry");
+    check(found_readme, "getdents64 found readme.txt in /");
+    printf("    root dir entries: %d\n", count);
+
+    r = getdents64(fd, (struct linux_dirent64*)buf, sizeof(buf));
+    check(r >= 0, "second getdents64 call succeeds (0 = EOF ok)");
+
+    lseek(fd, 0, SEEK_SET);
+    r = getdents64(fd, (struct linux_dirent64*)buf, sizeof(buf));
+    check(r > 0, "getdents64 after lseek(0) works again");
+
+    close(fd);
+
+    fd = open("/", O_RDONLY);
+    if (fd >= 0) {
+        char tiny[4];
+        r = getdents64(fd, (struct linux_dirent64*)tiny, sizeof(tiny));
+        check(r < 0, "getdents64 buffer too small fails");
+        close(fd);
+    }
+
+    r = getdents64(-1, (struct linux_dirent64*)buf, sizeof(buf));
+    check(r < 0, "getdents64 bad fd fails");
+
+    fd = open("/", O_RDONLY);
+    if (fd >= 0) {
+        r = getdents64(fd, (struct linux_dirent64*)0, sizeof(buf));
+        check(r < 0, "getdents64 NULL buf fails");
+        close(fd);
+    }
+
+    mkdir("/dents_test", 0755);
+    int f1 = open("/dents_test/aaa.txt", O_RDWR | O_CREAT | O_TRUNC);
+    int f2 = open("/dents_test/bbb.txt", O_RDWR | O_CREAT | O_TRUNC);
+    if (f1 >= 0) close(f1);
+    if (f2 >= 0) close(f2);
+
+    fd = open("/dents_test", O_RDONLY);
+    check(fd >= 0, "open /dents_test");
+    if (fd >= 0) {
+        r = getdents64(fd, (struct linux_dirent64*)buf, sizeof(buf));
+        check(r > 0, "getdents64 on new dir returns > 0");
+
+        int found_a = 0, found_b = 0;
+        pos = 0;
+        while (pos < r) {
+            struct linux_dirent64* d = (struct linux_dirent64*)(buf + pos);
+            if (d->d_reclen == 0) break;
+            if (strcmp(d->d_name, "aaa.txt") == 0) found_a = 1;
+            if (strcmp(d->d_name, "bbb.txt") == 0) found_b = 1;
+            pos += d->d_reclen;
+        }
+        check(found_a, "getdents64 found aaa.txt");
+        check(found_b, "getdents64 found bbb.txt");
+        close(fd);
+    }
+
+    unlink("/dents_test/aaa.txt");
+    unlink("/dents_test/bbb.txt");
+    rmdir("/dents_test");
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -2191,6 +2730,19 @@ void _start() {
     test_semaphore_multi();
     test_clone_thread_local();
     test_clone_futex_barrier();
+    test_nanosleep();
+    test_clock_getres();
+    test_getppid();
+    test_gettimeofday();
+    test_getrusage();
+    test_umask();
+    test_fcntl();
+    test_dup_dup2();
+    test_pread_pwrite();
+    test_ftruncate();
+    test_readlink();
+    test_newfstatat();
+    test_getdents64();
 
     print_summary();
     exit(0);

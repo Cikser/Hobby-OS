@@ -560,7 +560,7 @@ uint64_t SyscallHandler::sys_newfstatat(TrapFrame* tf) {
 
     VfsInode* inode = nullptr;
 
-    if ((flags & AT_EMPTY_PATH) && pathAddr == 0) {
+    if (flags & AT_EMPTY_PATH) {
         if (dirfd == -100) {
             inode = VFS::getInode(2);
         }

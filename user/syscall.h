@@ -46,6 +46,21 @@ typedef void*              mmap_ptr_t;
 #define SYS_MMAP            222
 #define SYS_MPROTECT        226
 #define SYS_WAIT4           260
+#define SYS_DUP             23
+#define SYS_DUP3            24
+#define SYS_FCNTL           25
+#define SYS_GETDENTS64      61
+#define SYS_PREAD64         67
+#define SYS_PWRITE64        68
+#define SYS_READLINKAT      78
+#define SYS_NEWFSTATAT      79
+#define SYS_FTRUNCATE       46
+#define SYS_NANOSLEEP       101
+#define SYS_CLOCK_GETRES    114
+#define SYS_GETPPID         173
+#define SYS_GETTIMEOFDAY    169
+#define SYS_GETRUSAGE       165
+#define SYS_UMASK           166
 
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
@@ -80,6 +95,11 @@ typedef void*              mmap_ptr_t;
 
 #define AT_FDCWD -100
 #define AT_REMOVEDIR 0x200
+#define AT_EMPTY_PATH 0x1000
+
+#define DT_UNKNOWN 0
+#define DT_REG     8
+#define DT_DIR     4
 
 #define FUTEX_WAIT 0
 #define FUTEX_WAKE 1
@@ -170,6 +190,38 @@ struct utsname {
     char release[65];
     char version[65];
     char machine[65];
+};
+
+struct timeval {
+    int64_t tv_sec;
+    int64_t tv_usec;
+};
+
+struct rusage {
+    struct timeval ru_utime;
+    struct timeval ru_stime;
+    int64_t ru_maxrss;
+    int64_t ru_ixrss;
+    int64_t ru_idrss;
+    int64_t ru_isrss;
+    int64_t ru_minflt;
+    int64_t ru_majflt;
+    int64_t ru_nswap;
+    int64_t ru_inblock;
+    int64_t ru_oublock;
+    int64_t ru_msgsnd;
+    int64_t ru_msgrcv;
+    int64_t ru_nsignals;
+    int64_t ru_nvcsw;
+    int64_t ru_nivcsw;
+};
+
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t  d_off;
+    uint16_t d_reclen;
+    uint8_t  d_type;
+    char     d_name[256];
 };
 
 static inline void exit(int code) {
@@ -317,6 +369,104 @@ static inline pid_t gettid() {
 
 static inline int sched_yield() {
     return _SC0(SYS_SCHED_YIELD);
+}
+
+static inline int nanosleep(const struct timespec* req, struct timespec* rem) {
+    return (int)_SC2(SYS_NANOSLEEP, req, rem);
+}
+
+static inline int clock_getres(int clockid, struct timespec* res) {
+    return (int)_SC2(SYS_CLOCK_GETRES, clockid, res);
+}
+
+static inline pid_t getppid(void) {
+    return (pid_t)_SC0(SYS_GETPPID);
+}
+
+static inline int gettimeofday(struct timeval* tv, void* tz) {
+    return (int)_SC2(SYS_GETTIMEOFDAY, tv, tz);
+}
+
+static inline int getrusage(int who, struct rusage* usage) {
+    return (int)_SC2(SYS_GETRUSAGE, who, usage);
+}
+
+static inline uint32_t umask(uint32_t mask) {
+    return (uint32_t)_SC1(SYS_UMASK, mask);
+}
+
+static inline int fcntl(int fd, int cmd, int arg) {
+    return (int)_SC3(SYS_FCNTL, fd, cmd, arg);
+}
+
+static inline int dup(int fd) {
+    return (int)_SC1(SYS_DUP, fd);
+}
+
+static inline int dup2(int oldfd, int newfd) {
+    return (int)_SC3(SYS_DUP3, oldfd, newfd, 0);
+}
+
+static inline int dup3(int oldfd, int newfd, int flags) {
+    return (int)_SC3(SYS_DUP3, oldfd, newfd, flags);
+}
+
+static inline int ftruncate(int fd, int64_t length) {
+    return (int)_SC2(SYS_FTRUNCATE, fd, length);
+}
+
+static inline ssize_t pread(int fd, void* buf, size_t count, int64_t offset) {
+    return (ssize_t)_SC4(SYS_PREAD64, fd, buf, count, offset);
+}
+
+static inline ssize_t pwrite(int fd, const void* buf, size_t count, int64_t offset) {
+    return (ssize_t)_SC4(SYS_PWRITE64, fd, buf, count, offset);
+}
+
+static inline ssize_t readlinkat(int dirfd, const char* path, char* buf, size_t bufsiz) {
+    return (ssize_t)_SC4(SYS_READLINKAT, dirfd, path, buf, bufsiz);
+}
+
+static inline ssize_t readlink(const char* path, char* buf, size_t bufsiz) {
+    return readlinkat(AT_FDCWD, path, buf, bufsiz);
+}
+
+static inline int newfstatat(int dirfd, const char* path, struct stat* st, int flags) {
+    return (int)_SC4(SYS_NEWFSTATAT, dirfd, path, st, flags);
+}
+
+static inline int stat(const char* path, struct stat* st) {
+    return newfstatat(AT_FDCWD, path, st, 0);
+}
+
+static inline int lstat(const char* path, struct stat* st) {
+    return newfstatat(AT_FDCWD, path, st, 0);
+}
+
+static inline ssize_t getdents64(int fd, struct linux_dirent64* buf, size_t count) {
+    return (ssize_t)_SC3(SYS_GETDENTS64, fd, buf, count);
+}
+
+#define F_DUPFD    0
+#define F_GETFD    1
+#define F_SETFD    2
+#define F_GETFL    3
+#define F_SETFL    4
+#define FD_CLOEXEC 1
+
+#define RUSAGE_SELF     0
+#define RUSAGE_CHILDREN (-1)
+
+static inline unsigned int sleep(unsigned int seconds) {
+    struct timespec req = { (int64_t)seconds, 0 };
+    struct timespec rem = { 0, 0 };
+    nanosleep(&req, &rem);
+    return (unsigned int)rem.tv_sec;
+}
+
+static inline int usleep(unsigned int usecs) {
+    struct timespec req = { 0, (int64_t)usecs * 1000 };
+    return nanosleep(&req, (struct timespec*)0);
 }
 
 #define STACK_SIZE (4096 * 4)

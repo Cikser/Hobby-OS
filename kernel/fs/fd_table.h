@@ -17,6 +17,7 @@ public:
     void release();
 
     int alloc(File* file);
+    int allocAt(int fd, File* file);
     File* get(int fd) const;
     int close(int fd);
     void closeAll();

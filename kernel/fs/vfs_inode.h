@@ -6,6 +6,7 @@
 struct DirEntry {
     char name[256];
     uint32_t inodeNum;
+    uint8_t fileType;
 };
 
 struct InodeStat {

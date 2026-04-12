@@ -84,3 +84,22 @@ void FdTable::closeAll() {
         m_fds[i] = nullptr;
     }
 }
+
+int FdTable::allocAt(int fd, File* file) {
+    if (fd < 0 || fd >= MAX_FDS || !file) return -1;
+
+    m_lock.acquire();
+ 
+    if (m_fds[fd]) {
+        File* old = m_fds[fd];
+        m_fds[fd] = nullptr;
+        m_lock.release();
+        old->close();
+        delete old;
+        m_lock.acquire();
+    }
+
+    m_fds[fd] = file;
+    m_lock.release();
+    return fd;
+}

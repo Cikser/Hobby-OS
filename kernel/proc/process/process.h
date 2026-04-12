@@ -31,6 +31,7 @@ public:
 
     Process* owner() override { return this; }
     bool isProcess() override { return true; }
+    pid_t ppid() const { return m_parent ? m_parent->m_pid : 0; }
     void clear() override;
     int exec(const char* elfPath);
     Process* fork();
@@ -59,6 +60,7 @@ public:
 private:
     friend class Thread;
     friend class PCBGarbage;
+    friend class SyscallHandler;
 
     static constexpr uint32_t MAX_FDS = 16;
     static constexpr uint64_t HEAP_START = 0x1000000;

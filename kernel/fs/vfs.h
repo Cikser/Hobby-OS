@@ -17,6 +17,7 @@ public:
 
 private:
     friend class Process;
+    friend class SyscallHandler;
     static VfsInode* resolvePath(const char* path);
     static VfsInode* resolveParent(const char* path, const char** outName);
 

@@ -718,6 +718,7 @@ int Ext2Inode::readdir(uint32_t index, DirEntry* dir) {
                     memcpy(dir->name, entry->name, entry->name_len);
                     dir->name[entry->name_len] = '\0';
                     dir->inodeNum = entry->inode;
+                    dir->fileType = entry->file_type;
                     return 0;
                 }
                 count++;

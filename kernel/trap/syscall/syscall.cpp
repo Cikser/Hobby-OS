@@ -936,3 +936,182 @@ uint64_t SyscallHandler::sys_umask(TrapFrame* tf) {
     g_umask = newmask & 0777;
     return (uint64_t)old;
 }
+
+static Process* findProcess(pid_t pid) {
+    Process* current = PCB::runningProcess();
+    if (!current) return nullptr;
+    if (current->pid() == pid) return current;
+    return nullptr;
+}
+
+uint64_t SyscallHandler::sys_kill(TrapFrame* tf) {
+    auto pid = (pid_t)(int64_t)tf->a0;
+    auto signum = (int)(int64_t)tf->a1;
+
+    if (signum < 0 || signum >= NSIG) return (uint64_t)-22;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    if (pid == 0 || pid == (pid_t)proc->pid()) {
+        return (uint64_t)proc->kill(signum);
+    }
+
+    Process* target = findProcess(pid);
+    if (!target) return (uint64_t)-3;
+
+    return (uint64_t)target->kill(signum);
+}
+
+uint64_t SyscallHandler::sys_tkill(TrapFrame* tf) {
+    auto signum = (int)(int64_t)tf->a1;
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+    return (uint64_t)proc->kill(signum);
+}
+
+uint64_t SyscallHandler::sys_tgkill(TrapFrame* tf) {
+    auto signum = (int)(int64_t)tf->a2;
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+    return (uint64_t)proc->kill(signum);
+}
+
+uint64_t SyscallHandler::sys_rt_sigaction(TrapFrame* tf) {
+    auto signum = (int)(int64_t)tf->a0;
+    auto actPtr = (SignalAction*)tf->a1;
+    auto oldPtr = (SignalAction*)tf->a2;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    SignalAction kact, kold;
+
+    if (actPtr) {
+        if (!proc->checkOperation((uint64_t)actPtr, sizeof(SignalAction), SegmentDesc::SEG_R))
+            return (uint64_t)-14;
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        memcpy(&kact, actPtr, sizeof(SignalAction));
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+
+    int ret = proc->sigaction(signum,
+                              actPtr  ? &kact : nullptr,
+                              oldPtr  ? &kold : nullptr);
+    if (ret != 0) return (uint64_t)(int64_t)ret;
+
+    if (oldPtr) {
+        if (!proc->checkOperation((uint64_t)oldPtr, sizeof(SignalAction), SegmentDesc::SEG_W))
+            return (uint64_t)-14;
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        memcpy(oldPtr, &kold, sizeof(SignalAction));
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_rt_sigprocmask(TrapFrame* tf) {
+    auto how    = (int)(int64_t)tf->a0;
+    auto setPtr = (uint64_t*)tf->a1;
+    auto oldPtr = (uint64_t*)tf->a2;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    uint64_t kset = 0;
+    if (setPtr) {
+        if (!proc->checkOperation((uint64_t)setPtr, sizeof(uint64_t), SegmentDesc::SEG_R))
+            return (uint64_t)-14;
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        kset = *setPtr;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+
+    uint64_t kold = 0;
+    int ret = proc->sigprocmask(how, setPtr ? &kset : nullptr, &kold);
+    if (ret != 0) return (uint64_t)(int64_t)ret;
+
+    if (oldPtr) {
+        if (!proc->checkOperation((uint64_t)oldPtr, sizeof(uint64_t), SegmentDesc::SEG_W))
+            return (uint64_t)-14;
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *oldPtr = kold;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_rt_sigreturn(TrapFrame* tf) {
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    uint64_t sp = tf->sp;
+    if (!proc->checkOperation(sp, sizeof(SignalFrame), SegmentDesc::SEG_R))
+        return (uint64_t)-14;
+
+    SignalFrame frame;
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    memcpy(&frame, (void*)sp, sizeof(SignalFrame));
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    tf->sepc = frame.sepc;
+    tf->ra = frame.ra;
+    tf->sp = frame.sp;
+    tf->gp = frame.gp;
+    tf->tp = frame.tp;
+    tf->t0 = frame.t0;
+    tf->t1 = frame.t1;
+    tf->t2 = frame.t2;
+    tf->s0 = frame.s0;
+    tf->s1 = frame.s1;
+    tf->a0 = frame.a0;
+    tf->a1 = frame.a1;
+    tf->a2 = frame.a2;
+    tf->a3 = frame.a3;
+    tf->a4 = frame.a4;
+    tf->a5 = frame.a5;
+    tf->a6 = frame.a6;
+    tf->a7 = frame.a7;
+    tf->s2 = frame.s2;
+    tf->s3 = frame.s3;
+    tf->s4 = frame.s4;
+    tf->s5 = frame.s5;
+    tf->s6 = frame.s6;
+    tf->s7 = frame.s7;
+    tf->s8 = frame.s8;
+    tf->s9 = frame.s9;
+    tf->s10 = frame.s10;
+    tf->s11 = frame.s11;
+    tf->t3 = frame.t3;
+    tf->t4 = frame.t4;
+    tf->t5 = frame.t5;
+    tf->t6 = frame.t6;
+    tf->kstack = frame.kstack;
+
+    PCB::running()->m_sigMask = frame.saved_mask;
+
+    return tf->a0;
+}
+
+uint64_t SyscallHandler::sys_rt_sigpending(TrapFrame* tf) {
+    auto setPtr = (uint64_t*)tf->a0;
+    Process* proc = PCB::runningProcess();
+    if (!proc || !setPtr) return (uint64_t)-1;
+    if (!proc->checkOperation((uint64_t)setPtr, sizeof(uint64_t), SegmentDesc::SEG_W))
+        return (uint64_t)-14;
+
+    uint64_t pending = 0;
+    if (proc->m_signalHandler)
+        pending = proc->m_signalHandler->hasPending(proc->m_sigMask)
+                      ? proc->m_sigMask
+                      : 0;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    *setPtr = pending;
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_sigaltstack(TrapFrame* tf) {
+    return 0;
+}

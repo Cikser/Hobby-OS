@@ -29,6 +29,9 @@ Thread::Thread(Process* parent, uint64_t entry, void* args) :
 
     m_trapFrame->sp = stackTop;
     m_args = args;
+    m_signalHandler = parent->m_signalHandler;
+    m_signalHandler->acquire();
+    m_sigMask = parent->m_sigMask;
 }
 
 Thread::Thread(void (*entry)(void*), void* args) :
@@ -63,6 +66,9 @@ Thread::Thread(Process* parent, uint64_t entry, uint64_t userStack,
         RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
     }
     m_tgid = m_parent->m_pid;
+    m_signalHandler = parent->m_signalHandler;
+    m_signalHandler->acquire();
+    m_sigMask = parent->m_sigMask;
 }
 
 void Thread::clear() {

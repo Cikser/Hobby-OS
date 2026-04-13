@@ -38,7 +38,7 @@ private:
     void* m_start;
 
     static constexpr uint32_t FREE_END = ~0;
-    static constexpr uint64_t OBJ_SIZE_THRESHOLD = 512;
+    static constexpr uint64_t OBJ_SIZE_THRESHOLD = 4096;
 
 };
 

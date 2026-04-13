@@ -1,6 +1,7 @@
 #ifndef RISC_V_PROCESS_H
 #define RISC_V_PROCESS_H
 
+#include "console.h"
 #include "../../fs/fd_table.h"
 #include "../../mm/vm/mmap.h"
 #include "../sync/sem.h"
@@ -50,6 +51,9 @@ public:
     int mkdir(const char* path, uint32_t mode) const;
     int fstat(int fd, InodeStat* st) const;
     void exitGroup(int exitCode = 0);
+    int kill(int signum);
+    int sigaction(int signum, const SignalAction* act, SignalAction* oldact) const;
+    int sigprocmask(int how, const uint64_t* set, uint64_t* oldset);
 
     bool checkOperation(uint64_t addr, uint64_t len, uint32_t op) const {
         if (addr > addr + len) return false;
@@ -88,8 +92,7 @@ private:
 };
 
 static constexpr uint64_t CSIGNAL = 0xFF;
-static constexpr uint64_t SIGCHLD = 17;
-
+static constexpr uint64_t SIGCHLD_FLAG = 17;
 static constexpr uint64_t CLONE_VM = 0x00000100;
 static constexpr uint64_t CLONE_FS = 0x00000200;
 static constexpr uint64_t CLONE_FILES = 0x00000400;

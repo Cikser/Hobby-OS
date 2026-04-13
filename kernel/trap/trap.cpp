@@ -44,9 +44,7 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             PCBGarbage::clear();
             PCB::s_timeSliceCounter++;
             if (PCB::s_timeSliceCounter >= PCB::running()->m_timeSlice) {
-                uint64_t sstatus = RiscV::r_sstatus();
-                PCB::dispatch();
-                RiscV::w_sstatus(sstatus);
+                PCB::yield();
             }
             break;
         }
@@ -60,7 +58,7 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
         }
         case PF_STORE: {
             if (VM::handleCowFault(stval)) break;
-            //Console::kprintf("store page fault: sepc=0x%lx stval=0x%lx\n", sepc, stval);
+            Console::kprintf("store page fault: sepc=0x%lx stval=0x%lx\n", sepc, stval);
             //PCB::runningProcess()->exit(-1);
             //break;
         }
@@ -70,5 +68,9 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             Console::kprintf("stval: 0x%lx\n", stval);
             Console::panic("kernel trap");
         }
+    }
+    PCB* running = PCB::running();
+    if (running && running->m_usermode) {
+        SignalHandler::signalDispatch(trapFrame);
     }
 }

@@ -35,6 +35,14 @@ enum Syscall {
     SYS_CLOCK_GETTIME = 113,
     SYS_CLOCK_GETRES = 114,
     SYS_SCHED_YIELD = 124,
+    SYS_KILL = 129,
+    SYS_TKILL = 130,
+    SYS_TGKILL = 131,
+    SYS_SIGALTSTACK = 132,
+    SYS_RT_SIGACTION = 134,
+    SYS_RT_SIGPROCMASK = 135,
+    SYS_RT_SIGRETURN = 139,
+    SYS_RT_SIGPENDING = 136,
     SYS_UNAME = 160,
     SYS_GETRUSAGE = 165,
     SYS_UMASK = 166,
@@ -107,6 +115,14 @@ private:
     static uint64_t sys_dup(TrapFrame* tf);
     static uint64_t sys_dup3(TrapFrame* tf);
     static uint64_t sys_ftruncate(TrapFrame* tf);
+    static uint64_t sys_kill(TrapFrame* tf);
+    static uint64_t sys_tkill(TrapFrame* tf);
+    static uint64_t sys_tgkill(TrapFrame* tf);
+    static uint64_t sys_rt_sigaction(TrapFrame* tf);
+    static uint64_t sys_rt_sigprocmask(TrapFrame* tf);
+    static uint64_t sys_rt_sigreturn(TrapFrame* tf);
+    static uint64_t sys_rt_sigpending(TrapFrame* tf);
+    static uint64_t sys_sigaltstack(TrapFrame* tf);
 };
 
 #endif

@@ -4,7 +4,8 @@
 #include "../types.h"
 #include "../trap/trapframe.h"
 #include "../mm/vm/pmt.h"
-#include "../sync/sem.h"
+#include "sync/sem.h"
+#include "signal/signal_handler.h"
 
 enum class ProcState {
     READY,
@@ -66,6 +67,8 @@ protected:
     friend class ProcList;
     friend class TrapHandler;
     friend class PCBGarbage;
+    friend class SignalHandler;
+    friend class SyscallHandler;
 
     static constexpr time_t DEFAULT_TIME_SLICE = 2;
 
@@ -94,6 +97,8 @@ protected:
     Semaphore m_waitSem;
     uint64_t m_tidAddress;
     pid_t m_tgid;
+    uint64_t m_sigMask;
+    SignalHandler* m_signalHandler;
     mutable Lock m_lock;
 
     static pid_t s_pid;

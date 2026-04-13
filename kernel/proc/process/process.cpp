@@ -1,8 +1,8 @@
 #include "process.h"
-
+#include "../scheduler.h"
 #include "garbage.h"
-#include "path_utils.h"
-#include "riscv.h"
+#include "../../fs/path_utils.h"
+#include "../../hw/riscv.h"
 #include "../thread/thread.h"
 #include "../../io/console/uart_inode.h"
 #include "../../fs/vfs.h"
@@ -52,6 +52,8 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
         m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_WRONLY));
 
         m_mmap = new Mmap(m_pmt, m_segTable);
+        m_signalHandler = new SignalHandler();
+        m_sigMask = 0;
     }
 }
 
@@ -70,6 +72,10 @@ void Process::clear() {
     delete m_segTable;
     delete m_cwdPath;
     VM::destroyPMT(m_pmt);
+    /*if (m_signalHandler && m_signalHandler->release()) {
+        delete m_signalHandler;
+        m_signalHandler = nullptr;
+    }*/
     PCB::clear();
 }
 
@@ -115,6 +121,8 @@ Process* Process::fork() {
 
     FdTable* childFds = m_fdTable->clone();
     auto child = new Process(pmt, -1, this, childFds);
+    child->m_signalHandler = m_signalHandler->clone();
+    child->m_sigMask = m_sigMask;
     uint64_t childStackVa = USER_STACK_TOP -
         child->m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
         - USER_STACK_SIZE;
@@ -567,4 +575,54 @@ void Process::exitGroup(int exitCode) {
     m_lock.release();
 
     exit(exitCode);
+}
+
+int Process::kill(int signum) {
+    if (signum < 0 || signum >= NSIG) return -1;
+    if (!m_signalHandler) return -1;
+
+    if (signum == 0) return 0;
+
+    m_signalHandler->send(signum);
+
+    m_lock.acquire();
+    if (m_state == ProcState::SLEEPING || m_state == ProcState::BLOCKED) {
+        setState(ProcState::READY);
+        Scheduler::put(this);
+    }
+    Thread* t = m_threads;
+    while (t) {
+        if (t->m_state == ProcState::SLEEPING || t->m_state == ProcState::BLOCKED) {
+            t->setState(ProcState::READY);
+            Scheduler::put(t);
+        }
+        t = t->m_nextThread;
+    }
+    m_lock.release();
+    return 0;
+}
+
+int Process::sigaction(int signum, const SignalAction* act, SignalAction* oldact) const {
+    if (!m_signalHandler) return -1;
+    return m_signalHandler->setAction(signum, act, oldact);
+}
+
+int Process::sigprocmask(int how, const uint64_t* set, uint64_t* oldset) {
+    if (oldset) *oldset = m_sigMask;
+    if (!set)   return 0;
+
+    constexpr int SIG_BLOCK = 0;
+    constexpr int SIG_UNBLOCK = 1;
+    constexpr int SIG_SETMASK = 2;
+
+    uint64_t newMask = m_sigMask;
+    switch (how) {
+    case SIG_BLOCK: newMask |= *set; break;
+    case SIG_UNBLOCK: newMask &= ~(*set); break;
+    case SIG_SETMASK: newMask  = *set; break;
+    default: return -1;
+    }
+    newMask &= ~(sigBit(SIGKILL) | sigBit(SIGSTOP));
+    m_sigMask = newMask;
+    return 0;
 }

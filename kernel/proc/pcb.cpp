@@ -1,6 +1,5 @@
 #include "pcb.h"
 #include "scheduler.h"
-#include "vfs.h"
 #include "../hw/riscv.h"
 #include "../io/console/console.h"
 #include "../mm/mem.h"
@@ -22,6 +21,8 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_args(nullptr),
     m_waitSem(Semaphore(0)),
     m_tidAddress(0),
+    m_sigMask(0),
+    m_signalHandler(nullptr),
     m_lock(Lock())
 {
     s_pidLock.acquire();

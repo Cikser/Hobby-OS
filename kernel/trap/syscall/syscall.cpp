@@ -60,6 +60,14 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_DUP: tf->a0 = sys_dup(tf); break;
     case SYS_DUP3: tf->a0 = sys_dup3(tf); break;
     case SYS_FTRUNCATE: tf->a0 = sys_ftruncate(tf); break;
+    case SYS_KILL: tf->a0 = sys_kill(tf); break;
+    case SYS_TKILL: tf->a0 = sys_tkill(tf); break;
+    case SYS_TGKILL: tf->a0 = sys_tgkill(tf); break;
+    case SYS_SIGALTSTACK: tf->a0 = sys_sigaltstack(tf); break;
+    case SYS_RT_SIGACTION: tf->a0 = sys_rt_sigaction(tf); break;
+    case SYS_RT_SIGPROCMASK: tf->a0 = sys_rt_sigprocmask(tf); break;
+    case SYS_RT_SIGPENDING: tf->a0 = sys_rt_sigpending(tf); break;
+    case SYS_RT_SIGRETURN: tf->a0 = sys_rt_sigreturn(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;

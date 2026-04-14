@@ -61,6 +61,14 @@ typedef void*              mmap_ptr_t;
 #define SYS_GETTIMEOFDAY    169
 #define SYS_GETRUSAGE       165
 #define SYS_UMASK           166
+#define SYS_KILL            129
+#define SYS_TKILL           130
+#define SYS_TGKILL          131
+#define SYS_SIGALTSTACK     132
+#define SYS_RT_SIGACTION    134
+#define SYS_RT_SIGPROCMASK  135
+#define SYS_RT_SIGPENDING   136
+#define SYS_RT_SIGRETURN    139
 
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
@@ -445,6 +453,95 @@ static inline int lstat(const char* path, struct stat* st) {
 
 static inline ssize_t getdents64(int fd, struct linux_dirent64* buf, size_t count) {
     return (ssize_t)_SC3(SYS_GETDENTS64, fd, buf, count);
+}
+
+#define SIGHUP    1
+#define SIGINT    2
+#define SIGQUIT   3
+#define SIGILL    4
+#define SIGTRAP   5
+#define SIGABRT   6
+#define SIGBUS    7
+#define SIGFPE    8
+#define SIGKILL   9
+#define SIGUSR1  10
+#define SIGSEGV  11
+#define SIGUSR2  12
+#define SIGPIPE  13
+#define SIGALRM  14
+#define SIGTERM  15
+#define SIGCHLD  17
+#define SIGCONT  18
+#define SIGSTOP  19
+#define NSIG     32
+
+#define SIG_DFL  ((sighandler_t)0)
+#define SIG_IGN  ((sighandler_t)1)
+
+#define SA_RESTORER  (1UL << 26)
+#define SA_RESTART   (1UL << 24)
+#define SA_NOCLDSTOP (1UL << 0)
+
+typedef void (*sighandler_t)(int);
+typedef uint64_t sigset_t;
+
+struct sigaction_t {
+    uint64_t  sa_handler;
+    uint64_t  sa_flags;
+    uint64_t  sa_restorer;
+    sigset_t  sa_mask;
+};
+
+__attribute__((naked, noinline, section(".text.sigreturn")))
+static void __sigreturn_trampoline(void) {
+    __asm__ volatile (
+        "li a7, 139\n"
+        "ecall\n"
+    );
+}
+
+
+static inline int kill(pid_t pid, int sig) {
+    return (int)_SC2(SYS_KILL, pid, sig);
+}
+
+static inline int raise(int sig) {
+    return kill(getpid(), sig);
+}
+
+static inline int sigaction(int sig, const struct sigaction_t* act,
+                             struct sigaction_t* oldact) {
+    return (int)_SC4(SYS_RT_SIGACTION, sig, act, oldact, 8 );
+}
+
+static inline int signal(int sig, sighandler_t handler) {
+    struct sigaction_t act = {
+        .sa_handler  = (uint64_t)handler,
+        .sa_flags    = SA_RESTORER,
+        .sa_restorer = (uint64_t)__sigreturn_trampoline,
+        .sa_mask     = 0,
+    };
+    return sigaction(sig, &act, (struct sigaction_t*)0);
+}
+
+static inline int sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+    return (int)_SC4(SYS_RT_SIGPROCMASK, how, set, oldset, 8);
+}
+
+static inline int sigpending(sigset_t* set) {
+    return (int)_SC2(SYS_RT_SIGPENDING, set, 8);
+}
+
+static inline void sigemptyset(sigset_t* s) { *s = 0; }
+static inline void sigfillset(sigset_t* s)  { *s = ~(sigset_t)0; }
+static inline void sigaddset(sigset_t* s, int sig) {
+    if (sig >= 1 && sig < NSIG) *s |= (1ULL << (sig - 1));
+}
+static inline void sigdelset(sigset_t* s, int sig) {
+    if (sig >= 1 && sig < NSIG) *s &= ~(1ULL << (sig - 1));
+}
+static inline int sigismember(const sigset_t* s, int sig) {
+    return (sig >= 1 && sig < NSIG) ? ((*s >> (sig - 1)) & 1) : 0;
 }
 
 #define F_DUPFD    0

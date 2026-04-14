@@ -79,6 +79,16 @@ void Process::clear() {
     PCB::clear();
 }
 
+Process* Process::findProcess(pid_t pid) {
+    Process* current = PCB::runningProcess();
+    if (!current) return nullptr;
+    if (current->pid() == pid) return current;
+    for (auto it = current->m_firstChild; it; it = it->m_nextSibling) {
+        if (it->pid() == pid) return it;
+    }
+    return nullptr;
+}
+
 Process* Process::createInit() {
     PMT* pmt = VM::createPMT();
     auto proc = new Process(pmt, -1, nullptr);
@@ -318,6 +328,7 @@ void Process::exit(int exitCode) {
     if (m_parent) {
         m_parent->m_selfSem.signal();
     }
+    m_parent->kill(SIGCHLD);
     m_state = ProcState::ZOMBIE;
     clear();
     PCBGarbage::put(this);

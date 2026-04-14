@@ -75,6 +75,8 @@ private:
     Process(PMT* pmt, uint64_t entry, Process* parent,
             FdTable* fdTable = nullptr);
 
+    static Process* findProcess(pid_t pid);
+
     Thread* m_threads;
     Process* m_parent;
     File* m_fds[MAX_FDS]{};

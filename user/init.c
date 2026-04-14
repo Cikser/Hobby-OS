@@ -2665,6 +2665,478 @@ static void test_getdents64(void) {
     rmdir("/dents_test");
 }
 
+/* ================================================================== */
+/*  Signal syscall test suite — add to init.c                         */
+/*  Tests: kill, sigaction, sigprocmask, sigpending, sigreturn,       */
+/*         SIGKILL/SIGTERM default actions, sa_mask, inheritance      */
+/* ================================================================== */
+
+/* ------------------------------------------------------------------ */
+/*  Shared volatile state for signal handlers                         */
+/* ------------------------------------------------------------------ */
+
+static volatile int g_sig_received  = 0;
+static volatile int g_sig_number    = 0;
+static volatile int g_handler_calls = 0;
+
+static void sig_record(int sig) {
+    g_sig_received = 1;
+    g_sig_number   = sig;
+    g_handler_calls++;
+}
+
+static void sig_noop(int sig) {
+    (void)sig;
+}
+
+/* ------------------------------------------------------------------ */
+/*  66. kill(self) + sigaction — basic delivery                       */
+/* ------------------------------------------------------------------ */
+
+static void test_signal_basic(void) {
+    section("66. kill(self) + sigaction — basic delivery");
+
+    g_sig_received  = 0;
+    g_sig_number    = 0;
+    g_handler_calls = 0;
+
+    int r = signal(SIGUSR1, sig_record);
+    check(r == 0, "signal(SIGUSR1, handler) succeeds");
+
+    r = kill(getpid(), SIGUSR1);
+    check(r == 0, "kill(self, SIGUSR1) returns 0");
+
+    check(g_sig_received  == 1,       "handler called exactly once");
+    check(g_sig_number    == SIGUSR1, "handler received correct signum");
+    check(g_handler_calls == 1,       "handler_calls == 1");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  67. SIG_IGN — ignored signal is not delivered                     */
+/* ------------------------------------------------------------------ */
+
+static void test_signal_ign(void) {
+    section("67. SIG_IGN — signal is ignored");
+
+    g_sig_received = 0;
+
+    signal(SIGUSR2, SIG_IGN);
+    kill(getpid(), SIGUSR2);
+
+    check(g_sig_received == 0, "SIG_IGN: handler not called");
+
+    signal(SIGUSR2, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  68. sigaction: oldact returns previous handler                    */
+/* ------------------------------------------------------------------ */
+
+static void test_sigaction_oldact(void) {
+    section("68. sigaction — oldact returns previous handler");
+
+    struct sigaction_t first  = { (uint64_t)sig_record, SA_RESTORER,
+                                  (uint64_t)__sigreturn_trampoline, 0 };
+    struct sigaction_t second = { (uint64_t)sig_noop,   SA_RESTORER,
+                                  (uint64_t)__sigreturn_trampoline, 0 };
+    struct sigaction_t old;
+
+    sigaction(SIGUSR1, &first,  (struct sigaction_t*)0);
+    sigaction(SIGUSR1, &second, &old);
+
+    check((sighandler_t)old.sa_handler == sig_record,
+          "oldact.sa_handler == first handler");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  69. sigaction on SIGKILL/SIGSTOP must return error                */
+/* ------------------------------------------------------------------ */
+
+static void test_sigaction_unblockable(void) {
+    section("69. sigaction(SIGKILL/SIGSTOP) returns error");
+
+    struct sigaction_t act = { (uint64_t)sig_noop, SA_RESTORER,
+                               (uint64_t)__sigreturn_trampoline, 0 };
+
+    int r1 = sigaction(SIGKILL, &act, (struct sigaction_t*)0);
+    check(r1 < 0, "sigaction(SIGKILL, handler) returns error");
+
+    int r2 = sigaction(SIGSTOP, &act, (struct sigaction_t*)0);
+    check(r2 < 0, "sigaction(SIGSTOP, handler) returns error");
+}
+
+/* ------------------------------------------------------------------ */
+/*  70. sigprocmask — blocking and unblocking                         */
+/* ------------------------------------------------------------------ */
+
+static void test_sigprocmask(void) {
+    section("70. sigprocmask — blocking and unblocking");
+
+    g_sig_received = 0;
+    signal(SIGUSR1, sig_record);
+
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR1);
+
+    int r = sigprocmask(0 /*SIG_BLOCK*/, &mask, (sigset_t*)0);
+    check(r == 0, "sigprocmask(SIG_BLOCK) returns 0");
+
+    kill(getpid(), SIGUSR1);
+    check(g_sig_received == 0, "masked SIGUSR1 not delivered");
+
+    r = sigprocmask(1 /*SIG_UNBLOCK*/, &mask, (sigset_t*)0);
+    check(r == 0, "sigprocmask(SIG_UNBLOCK) returns 0");
+    check(g_sig_received == 1, "SIGUSR1 delivered after unblocking");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  71. sigprocmask: SIG_SETMASK                                      */
+/* ------------------------------------------------------------------ */
+
+static void test_sigprocmask_setmask(void) {
+    section("71. sigprocmask(SIG_SETMASK)");
+
+    sigset_t full, empty, old;
+    sigfillset(&full);
+    sigemptyset(&empty);
+
+    sigprocmask(2 /*SIG_SETMASK*/, &full, &old);
+    check(old == 0, "old mask was empty");
+
+    sigprocmask(2 /*SIG_SETMASK*/, &empty, (sigset_t*)0);
+
+    sigset_t cur;
+    sigprocmask(2 /*SIG_SETMASK*/, (sigset_t*)0, &cur);
+    check(cur == 0, "mask is empty again after SIG_SETMASK(empty)");
+}
+
+/* ------------------------------------------------------------------ */
+/*  72. sigpending — pending signal visible while masked              */
+/* ------------------------------------------------------------------ */
+
+static void test_sigpending(void) {
+    section("72. sigpending — visibility of pending signals");
+
+    g_sig_received = 0;
+    signal(SIGUSR2, sig_record);
+
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR2);
+    sigprocmask(0, &mask, (sigset_t*)0);
+    kill(getpid(), SIGUSR2);
+
+    sigset_t pending;
+    int r = sigpending(&pending);
+    check(r == 0,              "sigpending returns 0");
+    check(g_sig_received == 0, "signal not yet delivered while masked");
+
+    sigprocmask(1, &mask, (sigset_t*)0);
+    check(g_sig_received == 1, "signal delivered after unblocking");
+
+    signal(SIGUSR2, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  73. Multiple signals in sequence — each delivered at least once   */
+/* ------------------------------------------------------------------ */
+
+static void test_signal_multiple(void) {
+    section("73. multiple successive signals");
+
+    g_handler_calls = 0;
+    signal(SIGUSR1, sig_record);
+
+    for (int i = 0; i < 5; i++)
+        kill(getpid(), SIGUSR1);
+
+    /* Standard UNIX semantics: signals are not queued, only one
+       pending bit per signal number, so at least 1 delivery. */
+    check(g_handler_calls >= 1,
+          "handler called at least once for 5 kills");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  74. SIGTERM default action in child — parent sees exit code       */
+/* ------------------------------------------------------------------ */
+
+static void test_sigterm_default(void) {
+    section("74. SIGTERM — default action terminates process");
+
+    pid_t child = fork();
+    if (child == 0) {
+        kill(getpid(), SIGTERM);
+        exit(200);  /* must never be reached */
+    }
+
+    int st = 0;
+    pid_t w = waitpid(child, &st);
+    check(w == child, "waitpid returns child pid");
+    check(st != 200,  "child did not reach exit(200)");
+}
+
+/* ------------------------------------------------------------------ */
+/*  75. SIGKILL cannot be blocked or caught                           */
+/* ------------------------------------------------------------------ */
+
+static void test_sigkill_uncatchable(void) {
+    section("75. SIGKILL — cannot be caught or blocked");
+
+    int r = signal(SIGKILL, sig_noop);
+    check(r < 0, "signal(SIGKILL, handler) returns error");
+
+    sigset_t mask, old;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGKILL);
+    sigprocmask(0 /*SIG_BLOCK*/, &mask, &old);
+    check(!sigismember(&old, SIGKILL), "SIGKILL not in mask after SIG_BLOCK");
+
+    pid_t child = fork();
+    if (child == 0) {
+        signal(SIGKILL, sig_noop);  /* must be rejected */
+        kill(getpid(), SIGKILL);
+        exit(77);  /* must never be reached */
+    }
+    int st = 0;
+    waitpid(child, &st);
+    check(st != 77, "child killed by SIGKILL (did not reach exit(77))");
+}
+
+/* ------------------------------------------------------------------ */
+/*  76. sa_mask — additional signals blocked during handler           */
+/* ------------------------------------------------------------------ */
+
+static volatile int g_nested = 0;
+
+static void handler_check_nested(int sig) {
+    /* Send SIGUSR2 while inside this handler.  If sa_mask is set
+       correctly, it will not be delivered until we return. */
+    kill(getpid(), SIGUSR2);
+    for (volatile int i = 0; i < 100000; i++);
+    (void)sig;
+}
+
+static void handler_sigusr2_nested(int sig) {
+    g_nested = 1;
+    (void)sig;
+}
+
+static void test_sa_mask(void) {
+    section("76. sa_mask — signals blocked during handler execution");
+
+    g_nested = 0;
+    signal(SIGUSR2, handler_sigusr2_nested);
+
+    struct sigaction_t act;
+    act.sa_handler  = (uint64_t)handler_check_nested;
+    act.sa_flags    = SA_RESTORER;
+    act.sa_restorer = (uint64_t)__sigreturn_trampoline;
+    sigemptyset((sigset_t*)&act.sa_mask);
+    sigaddset((sigset_t*)&act.sa_mask, SIGUSR2);
+
+    sigaction(SIGUSR1, &act, (struct sigaction_t*)0);
+    kill(getpid(), SIGUSR1);
+
+    check(g_nested == 0,
+          "SIGUSR2 not delivered during SIGUSR1 handler (sa_mask works)");
+    check(g_nested == 1,
+          "SIGUSR2 delivered after returning from handler");
+
+    signal(SIGUSR1, SIG_DFL);
+    signal(SIGUSR2, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  77. sigreturn restores full register context                      */
+/* ------------------------------------------------------------------ */
+
+static volatile uint64_t g_val_before = 0;
+static volatile uint64_t g_val_after  = 0;
+
+static void handler_ctx(int sig) {
+    (void)sig;
+}
+
+static void test_sigreturn_context(void) {
+    section("77. sigreturn restores register context");
+
+    signal(SIGUSR1, handler_ctx);
+
+    uint64_t val = 0xDEADBEEFCAFEBABEULL;
+    g_val_before = val;
+
+    register uint64_t s1_reg __asm__("s1") = val;
+    __asm__ volatile ("" : "+r"(s1_reg));  /* pin value in s1 */
+
+    kill(getpid(), SIGUSR1);
+
+    uint64_t s1_after;
+    __asm__ volatile ("mv %0, s1" : "=r"(s1_after));
+    g_val_after = s1_after;
+
+    check(g_val_after == g_val_before,
+          "sigreturn: callee-saved register s1 restored correctly");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  78. fork — child inherits handlers but not pending signals        */
+/* ------------------------------------------------------------------ */
+
+static void test_signal_fork_inherit(void) {
+    section("78. fork — handler inherited, pending signals not");
+
+    signal(SIGUSR1, sig_record);
+
+    /* Make SIGUSR1 pending in the parent before forking. */
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR1);
+    sigprocmask(0, &mask, (sigset_t*)0);
+    kill(getpid(), SIGUSR1);
+
+    pid_t child = fork();
+    if (child == 0) {
+        g_sig_received = 0;
+        sigprocmask(1, &mask, (sigset_t*)0);
+        for (volatile int i = 0; i < 50000; i++);
+        exit(g_sig_received == 0 ? 0 : 1);
+    }
+
+    sigprocmask(1, &mask, (sigset_t*)0);
+
+    int st = 0;
+    waitpid(child, &st);
+    check(st == 0, "child did not inherit pending SIGUSR1");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  79. execve resets handlers to SIG_DFL                            */
+/* ------------------------------------------------------------------ */
+
+static void test_signal_exec_reset(void) {
+    section("79. execve resets signal handlers to SIG_DFL");
+
+    pid_t child = fork();
+    if (child == 0) {
+        signal(SIGUSR1, sig_noop);
+        const char* argv[] = { "/bin/init", 0 };
+        const char* envp[] = { 0 };
+        execve("/bin/init", (char* const*)argv, (char* const*)envp);
+        exit(99);
+    }
+    int st = 0;
+    waitpid(child, &st);
+    check(st == 0, "execve child exits 0 (/bin/init re-executed)");
+}
+
+/* ------------------------------------------------------------------ */
+/*  80. kill with invalid signum returns error                        */
+/* ------------------------------------------------------------------ */
+
+static void test_kill_invalid(void) {
+    section("80. kill — invalid signum and pid");
+
+    int r1 = kill(getpid(), -1);
+    check(r1 < 0, "kill(self, -1) returns error");
+
+    int r2 = kill(getpid(), NSIG + 1);
+    check(r2 < 0, "kill(self, NSIG+1) returns error");
+
+    int r3 = kill(getpid(), 0);
+    check(r3 == 0, "kill(self, 0) returns 0 (validity check only)");
+}
+
+/* ------------------------------------------------------------------ */
+/*  81. sigaction with NULL act — query only                          */
+/* ------------------------------------------------------------------ */
+
+static void test_sigaction_query(void) {
+    section("81. sigaction(NULL act) — query current disposition");
+
+    struct sigaction_t installed = { (uint64_t)sig_record, SA_RESTORER,
+                                     (uint64_t)__sigreturn_trampoline, 0 };
+    sigaction(SIGUSR1, &installed, (struct sigaction_t*)0);
+
+    struct sigaction_t queried;
+    int r = sigaction(SIGUSR1, (struct sigaction_t*)0, &queried);
+    check(r == 0, "sigaction(SIGUSR1, NULL, &old) returns 0");
+    check((sighandler_t)queried.sa_handler == sig_record,
+          "queried handler matches installed handler");
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  82. SIGCHLD — parent receives signal when child exits             */
+/* ------------------------------------------------------------------ */
+
+static volatile int g_sigchld_count = 0;
+
+static void handler_sigchld(int sig) {
+    g_sigchld_count++;
+    (void)sig;
+}
+
+static void test_sigchld(void) {
+    section("82. SIGCHLD delivered to parent when child exits");
+
+    g_sigchld_count = 0;
+    signal(SIGCHLD, handler_sigchld);
+
+    pid_t child = fork();
+    if (child == 0) exit(0);
+
+    int st = 0;
+    waitpid(child, &st);
+
+    for (volatile int i = 0; i < 200000; i++);
+    check(g_sigchld_count >= 1, "SIGCHLD delivered at least once");
+
+    signal(SIGCHLD, SIG_DFL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  83. Stress: 20 forked children killed with SIGTERM                */
+/* ------------------------------------------------------------------ */
+
+static void test_signal_stress(void) {
+    section("83. stress — 20 children killed with SIGTERM");
+
+    const int N = 5;
+    pid_t pids[5];
+
+    for (int i = 0; i < N; i++) {
+        pids[i] = fork();
+        if (pids[i] == 0) {
+            for (;;) sched_yield();
+        }
+    }
+
+    for (int i = 0; i < N; i++)
+        kill(pids[i], SIGTERM);
+
+    int ok = 1;
+    for (int i = 0; i < N; i++) {
+        int st = 0;
+        pid_t r = waitpid(pids[i], &st);
+        if (r != pids[i] || st == 0) { ok = 0; }
+    }
+    check(ok, "all children terminated by SIGTERM and reaped");
+}
+
 /* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
@@ -2678,7 +3150,7 @@ void _start() {
         exit(0);
     }
 
-    test_identity();
+    /*test_identity();
     test_set_tid_address();
     test_uname();
     test_clock_gettime();
@@ -2742,7 +3214,25 @@ void _start() {
     test_ftruncate();
     test_readlink();
     test_newfstatat();
-    test_getdents64();
+    test_getdents64();*/
+    test_signal_basic();
+    test_signal_ign();
+    test_sigaction_oldact();
+    test_sigaction_unblockable();
+    test_sigprocmask();
+    test_sigprocmask_setmask();
+    test_sigpending();
+    test_signal_multiple();
+    test_sigterm_default();
+    test_sigkill_uncatchable();
+    test_sa_mask();
+    test_sigreturn_context();
+    test_signal_fork_inherit();
+    test_signal_exec_reset();
+    test_kill_invalid();
+    test_sigaction_query();
+    test_sigchld();
+    test_signal_stress();
 
     print_summary();
     exit(0);

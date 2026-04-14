@@ -945,13 +945,6 @@ uint64_t SyscallHandler::sys_umask(TrapFrame* tf) {
     return (uint64_t)old;
 }
 
-static Process* findProcess(pid_t pid) {
-    Process* current = PCB::runningProcess();
-    if (!current) return nullptr;
-    if (current->pid() == pid) return current;
-    return nullptr;
-}
-
 uint64_t SyscallHandler::sys_kill(TrapFrame* tf) {
     auto pid = (pid_t)(int64_t)tf->a0;
     auto signum = (int)(int64_t)tf->a1;
@@ -965,7 +958,7 @@ uint64_t SyscallHandler::sys_kill(TrapFrame* tf) {
         return (uint64_t)proc->kill(signum);
     }
 
-    Process* target = findProcess(pid);
+    Process* target = Process::findProcess(pid);
     if (!target) return (uint64_t)-3;
 
     return (uint64_t)target->kill(signum);

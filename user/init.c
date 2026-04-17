@@ -2916,16 +2916,21 @@ static void test_sigkill_uncatchable(void) {
 /* ------------------------------------------------------------------ */
 
 static volatile int g_nested = 0;
+static volatile int g_in_handler = 0;
+static volatile int g_nested_during = 0;
+static volatile int g_nested_after = 0;
 
 static void handler_check_nested(int sig) {
-    /* Send SIGUSR2 while inside this handler.  If sa_mask is set
-       correctly, it will not be delivered until we return. */
+    g_in_handler = 1;
     kill(getpid(), SIGUSR2);
     for (volatile int i = 0; i < 100000; i++);
+    g_nested_during = g_nested;
+    g_in_handler = 0;
     (void)sig;
 }
 
 static void handler_sigusr2_nested(int sig) {
+    if (g_in_handler) g_nested_during = 1;
     g_nested = 1;
     (void)sig;
 }
@@ -2934,6 +2939,8 @@ static void test_sa_mask(void) {
     section("76. sa_mask — signals blocked during handler execution");
 
     g_nested = 0;
+    g_nested_during = 0;
+    g_in_handler = 0;
     signal(SIGUSR2, handler_sigusr2_nested);
 
     struct sigaction_t act;
@@ -2946,7 +2953,7 @@ static void test_sa_mask(void) {
     sigaction(SIGUSR1, &act, (struct sigaction_t*)0);
     kill(getpid(), SIGUSR1);
 
-    check(g_nested == 0,
+    check(g_nested_during == 0,
           "SIGUSR2 not delivered during SIGUSR1 handler (sa_mask works)");
     check(g_nested == 1,
           "SIGUSR2 delivered after returning from handler");
@@ -3150,7 +3157,7 @@ void _start() {
         exit(0);
     }
 
-    /*test_identity();
+    test_identity();
     test_set_tid_address();
     test_uname();
     test_clock_gettime();
@@ -3214,7 +3221,7 @@ void _start() {
     test_ftruncate();
     test_readlink();
     test_newfstatat();
-    test_getdents64();*/
+    test_getdents64();
     test_signal_basic();
     test_signal_ign();
     test_sigaction_oldact();

@@ -100,6 +100,4 @@ inline uint64_t sigBit(int signum) {
     return (signum >= 1 && signum < NSIG) ? (1ULL << (signum - 1)) : 0;
 }
 
-void signalDispatch(TrapFrame* tf);
-
 #endif

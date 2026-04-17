@@ -328,7 +328,8 @@ void Process::exit(int exitCode) {
     if (m_parent) {
         m_parent->m_selfSem.signal();
     }
-    m_parent->kill(SIGCHLD);
+    if (m_parent)
+        m_parent->kill(SIGCHLD);
     m_state = ProcState::ZOMBIE;
     clear();
     PCBGarbage::put(this);

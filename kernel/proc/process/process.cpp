@@ -79,6 +79,52 @@ void Process::clear() {
     PCB::clear();
 }
 
+uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16) const {
+    uint8_t* stackTop = m_ustack + USER_STACK_SIZE;
+    uint8_t* p = stackTop;
+
+    auto push8 = [&](uint64_t val) {
+        p -= 8;
+        *(uint64_t*)p = val;
+    };
+
+    size_t pathLen = strlen(path) + 1;
+    p -= pathLen;
+    memcpy(p, path, pathLen);
+    uint64_t argv0_addr = USER_STACK_TOP - (stackTop - p);
+
+    p = (uint8_t*)((uint64_t)p & ~0xFULL);
+
+    p -= 16;
+    memcpy(p, randomBytes16, 16);
+    uint64_t at_random_addr = USER_STACK_TOP - (stackTop - p);
+
+    p = (uint8_t*)((uint64_t)p & ~0xFULL);
+
+    push8(0); push8(0);
+    push8(0); push8(23);
+    push8(0); push8(14);
+    push8(0); push8(13);
+    push8(0); push8(12);
+    push8(0); push8(11);
+    push8(elfInfo.entry); push8(9);
+    push8(at_random_addr); push8(25);
+    push8(0); push8(16);
+    push8(4096); push8(6);
+    push8(elfInfo.phnum); push8(5);
+    push8(elfInfo.phent); push8(4);
+    push8(elfInfo.phdr_va); push8(3);
+    push8(0);
+
+    push8(0);
+    push8(argv0_addr);
+
+    push8(1);
+
+    uint64_t sp_offset = stackTop - p;
+    return USER_STACK_TOP - sp_offset;
+}
+
 Process* Process::findProcess(pid_t pid) {
     Process* current = PCB::runningProcess();
     if (!current) return nullptr;
@@ -93,13 +139,21 @@ Process* Process::createInit() {
     PMT* pmt = VM::createPMT();
     auto proc = new Process(pmt, -1, nullptr);
 
-    uint64_t entry = ElfLoader::load("/bin/init", pmt, proc->m_segTable);
-    if (!entry)
+    ElfLoadInfo* info = ElfLoader::load("/bin/init", pmt, proc->m_segTable);
+    if (!info || !info->entry)
         Console::panic("Process::createInit(): failed to load ELF");
 
-    proc->m_entry = entry;
+    uint8_t randomBytes[16] = {0};
+
+    uint64_t initialSp = proc->setupInitialStack("/bin/init", *info, randomBytes);
+
+    proc->m_entry = info->entry;
+    proc->m_trapFrame->sepc = info->entry;
+    proc->m_trapFrame->sp = initialSp;
+    proc->m_entry = info->entry;
     proc->m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START, HEAP_START);
     s_init = proc;
+    MemoryAllocator::kfree(info);
     return proc;
 }
 
@@ -184,36 +238,49 @@ int Process::exec(const char* elfPath) {
         return -1;
     }
     elf->close();
-    m_ustack = (uint8_t*)MemoryAllocator::kallocPages(USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-    if (!m_ustack) {
+    delete elf;
+
+    uint8_t* newUstack = (uint8_t*)MemoryAllocator::kallocPages(USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+    if (!newUstack) {
         m_spaceLock.release();
         return -1;
     }
-    uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
+
     VM::clearUserPages(m_pmt);
     m_segTable->clear();
-    uint64_t entry = ElfLoader::load(elfPath, m_pmt, m_segTable);
-    if (!entry) {
+
+    ElfLoadInfo* info = ElfLoader::load(elfPath, m_pmt, m_segTable);
+    if (!info) {
+        MemoryAllocator::kfreePages(newUstack, USER_STACK_SIZE / MemoryLayout::PAGE_SIZE);
         m_spaceLock.release();
         return -1;
     }
-    uint64_t oldKstack = m_trapFrame->kstack;
-    memset(m_trapFrame, 0, sizeof(TrapFrame));
-    m_trapFrame->kstack = oldKstack;
-    m_trapFrame->sepc = entry;
-    m_trapFrame->sp = USER_STACK_TOP;
+
+    m_ustack = newUstack;
+    uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
     m_pmt->mapPages(
             USER_STACK_TOP - USER_STACK_SIZE,
             ustackPa,
             USER_STACK_SIZE / MemoryLayout::PAGE_SIZE,
             PMT::PAGE_USER
         );
-    m_entry = entry;
-    m_trapFrame->sepc = entry;
-    m_trapFrame->sp = USER_STACK_TOP;
+
+    uint8_t randomBytes[16] = {0};
+    uint64_t initialSp = setupInitialStack(elfPath, *info, randomBytes);
+
+    uint64_t oldKstack = m_trapFrame->kstack;
+    memset(m_trapFrame, 0, sizeof(TrapFrame));
+    m_trapFrame->kstack = oldKstack;
+    m_trapFrame->sepc = info->entry;
+    m_trapFrame->sp = initialSp;
+
+    m_entry = info->entry;
+    MemoryAllocator::kfree(info);
+
     m_segTable->setHeap(SegmentDesc::SEG_R | SegmentDesc::SEG_W, HEAP_START,HEAP_START);
     m_segTable->setStack(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
         USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
+
     RiscV::flushTLB();
     m_spaceLock.release();
     return 0;

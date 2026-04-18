@@ -34,6 +34,13 @@ struct Elf64ProgramHeader {
     uint64_t p_align;
 };
 
+struct ElfLoadInfo {
+    uint64_t entry;
+    uint64_t phdr_va;
+    uint64_t phent;
+    uint64_t phnum;
+};
+
 static constexpr uint32_t PT_LOAD = 0x1;
 
 static constexpr uint32_t PF_X = 0x1;
@@ -52,7 +59,7 @@ static constexpr uint16_t EM_RISCV = 243;
 
 class ElfLoader {
 public:
-    static uint64_t load(const char* path, PMT* pmt, SegmentTable* segTable = nullptr);
+    static ElfLoadInfo* load(const char* path, PMT* pmt, SegmentTable* segTable = nullptr);
 
 private:
     static bool validateHeader(const Elf64Header& hdr);

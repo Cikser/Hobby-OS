@@ -28,16 +28,23 @@ uint64_t ElfLoader::flagsToPte(uint32_t flags) {
     return pte;
 }
 
-uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
+ElfLoadInfo* ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
     File* file = VFS::open(path, File::O_RDONLY);
-    if (!file) return 0;
+    if (!file) return nullptr;
 
     Elf64Header header;
     file->read(&header, sizeof(header));
     if (!validateHeader(header)) {
         file->close();
-        return 0;
+        return nullptr;
     }
+    auto* outInfo = (ElfLoadInfo*)MemoryAllocator::kmalloc(sizeof(ElfLoadInfo));
+
+    outInfo->entry = header.e_entry;
+    outInfo->phent = header.e_phentsize;
+    outInfo->phnum = header.e_phnum;
+    outInfo->phdr_va = 0;
+
     for (uint16_t i = 0; i < header.e_phnum; i++) {
         Elf64ProgramHeader programHeader;
         file->seek(header.e_phoff + i * sizeof(Elf64ProgramHeader), File::SEEK_SET);
@@ -50,7 +57,8 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
         auto mem = MemoryAllocator::kallocPages(pages);
         if (!mem) {
             file->close();
-            return 0;
+            MemoryAllocator::kfree(outInfo);
+            return nullptr;
         }
         memset(mem, 0, pages * MemoryLayout::PAGE_SIZE);
         file->seek(programHeader.p_offset, File::SEEK_SET);
@@ -59,6 +67,10 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
         uint64_t pa = MemoryLayout::v2p((uint64_t)mem);
         uint64_t flags = flagsToPte(programHeader.p_flags);
         pmt->mapPages(va, pa, pages, flags);
+
+        if (programHeader.p_offset == 0) {
+            outInfo->phdr_va = programHeader.p_vaddr + header.e_phoff;
+        }
 
         if (!segTable) continue;
 
@@ -80,5 +92,8 @@ uint64_t ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable) {
         }
     }
     file->close();
-    return header.e_entry;
+    if (outInfo->phdr_va == 0) {
+        outInfo->phdr_va = MemoryLayout::pageRoundDown(header.e_entry) + header.e_phoff;
+    }
+    return outInfo;
 }

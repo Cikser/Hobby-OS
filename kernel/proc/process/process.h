@@ -2,6 +2,7 @@
 #define RISC_V_PROCESS_H
 
 #include "console.h"
+#include "elf.h"
 #include "../../fs/fd_table.h"
 #include "../../mm/vm/mmap.h"
 #include "../sync/sem.h"
@@ -76,6 +77,7 @@ private:
             FdTable* fdTable = nullptr);
 
     static Process* findProcess(pid_t pid);
+    uint64_t setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16) const;
 
     Thread* m_threads;
     Process* m_parent;

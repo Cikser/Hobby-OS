@@ -53,7 +53,12 @@ ElfLoadInfo* ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable)
         if (programHeader.p_type != PT_LOAD) continue;
         if (programHeader.p_memsz == 0) continue;
 
-        uint64_t pages = (programHeader.p_memsz + MemoryLayout::PAGE_SIZE - 1) / MemoryLayout::PAGE_SIZE;
+        uint64_t vaddr_aligned = MemoryLayout::pageRoundDown(programHeader.p_vaddr);
+        uint64_t offset_in_page = programHeader.p_vaddr - vaddr_aligned;
+
+        uint64_t pages = (offset_in_page + programHeader.p_memsz +
+            MemoryLayout::PAGE_SIZE - 1) / MemoryLayout::PAGE_SIZE;
+
         auto mem = MemoryAllocator::kallocPages(pages);
         if (!mem) {
             file->close();
@@ -62,11 +67,11 @@ ElfLoadInfo* ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable)
         }
         memset(mem, 0, pages * MemoryLayout::PAGE_SIZE);
         file->seek(programHeader.p_offset, File::SEEK_SET);
-        file->read(mem, programHeader.p_filesz);
-        uint64_t va = MemoryLayout::pageRoundDown(programHeader.p_vaddr);
+        file->read((uint8_t*)mem + offset_in_page, programHeader.p_filesz);
+
         uint64_t pa = MemoryLayout::v2p((uint64_t)mem);
         uint64_t flags = flagsToPte(programHeader.p_flags);
-        pmt->mapPages(va, pa, pages, flags);
+        pmt->mapPages(vaddr_aligned, pa, pages, flags);
 
         if (programHeader.p_offset == 0) {
             outInfo->phdr_va = programHeader.p_vaddr + header.e_phoff;
@@ -74,21 +79,27 @@ ElfLoadInfo* ElfLoader::load(const char* path, PMT* pmt, SegmentTable* segTable)
 
         if (!segTable) continue;
 
-        uint64_t vaEnd = va + pages * MemoryLayout::PAGE_SIZE;
-        uint8_t segFlags = flags & ~(PMT::PAGE_U | PMT::PAGE_V);
-        if (programHeader.p_flags & PF_X) {
-            segTable->setText(segFlags, va, vaEnd);
-        } else if ((programHeader.p_flags & PF_R) == programHeader.p_flags) {
-            segTable->setRoData(segFlags, va, vaEnd);
-        } else if (programHeader.p_filesz == programHeader.p_memsz) {
-            segTable->setData(segFlags, va, vaEnd);
-        } else {
-            uint64_t dataEnd = MemoryLayout::pageRoundUp(va + programHeader.p_filesz);
-            if (dataEnd > va)
-                segTable->setData(segFlags & ~SegmentDesc::SEG_X, va, dataEnd);
+        uint64_t vaEnd = vaddr_aligned + pages * MemoryLayout::PAGE_SIZE;
+        uint8_t segFlags = (uint8_t)(flags & ~(PMT::PAGE_U | PMT::PAGE_V));
 
+        if (programHeader.p_flags & PF_X) {
+            segTable->setText(segFlags, vaddr_aligned, vaEnd);
+        }
+        else if ((programHeader.p_flags & (PF_R | PF_W)) == PF_R) {
+            segTable->setRoData(segFlags, vaddr_aligned, vaEnd);
+        }
+        else if (programHeader.p_filesz == programHeader.p_memsz) {
+            segTable->setData(segFlags, vaddr_aligned, vaEnd);
+        }
+        else {
+            uint64_t dataEnd = MemoryLayout::pageRoundUp(
+                vaddr_aligned + offset_in_page + programHeader.p_filesz);
+            if (dataEnd > vaddr_aligned)
+                segTable->setData(segFlags & ~SegmentDesc::SEG_X,
+                                  vaddr_aligned, dataEnd);
             if (dataEnd < vaEnd)
-                segTable->setBss(SegmentDesc::SEG_R | SegmentDesc::SEG_W, dataEnd, vaEnd);
+                segTable->setBss(SegmentDesc::SEG_R | SegmentDesc::SEG_W,
+                                 dataEnd, vaEnd);
         }
     }
     file->close();

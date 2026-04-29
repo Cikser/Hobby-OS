@@ -57,7 +57,7 @@ $(TARGET): $(OBJS)
 disasm: $(TARGET)
 	@$(OBJDUMP) -d $< > $(DISASM_FILE)
 
-$(DISK_IMG): user/init.elf
+$(DISK_IMG): user/init.elf user/hello_musl
 	@echo "Creating disk image: $(DISK_IMG) ($(DISK_SIZE_MB) MB)"
 	@rm -rf $(BUILD_DIR)/kfs_root
 	@mkdir -p $(BUILD_DIR)/kfs_root/subdir
@@ -67,12 +67,16 @@ $(DISK_IMG): user/init.elf
 	@printf "%s\n" "nested file"  > $(BUILD_DIR)/kfs_root/subdir/nested.txt
 	@python3 -c "print('x' * 5000, end='')" > $(BUILD_DIR)/kfs_root/large.txt
 	@cp user/init.elf $(BUILD_DIR)/kfs_root/bin/init
+	@cp user/hello_musl $(BUILD_DIR)/kfs_root/bin/hello_musl
 	@dd if=/dev/zero of=$(DISK_IMG) bs=1K count=$(DISK_BLOCKS_1K) 2>/dev/null
 	@mkfs.ext2 -F -b 1024 -d $(BUILD_DIR)/kfs_root -L "kfs" $(DISK_IMG) >/dev/null
 	@echo "Disk image ready"
 
 user/init.elf:
 	@$(MAKE) -C user init.elf
+
+user/hello_musl:
+	@$(MAKE) -C user hello_musl
 
 disk-img: $(DISK_IMG)
 
@@ -93,7 +97,7 @@ $(BUILD_DIR)/%.S.o: $(KERNEL_DIR)/%.S
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET) $(DISASM_FILE) $(DISK_IMG) user/init.o user/init.elf
+	rm -rf $(BUILD_DIR) $(TARGET) $(DISASM_FILE) $(DISK_IMG) user/init.o user/init.elf user/hello_musl
 
 qemu: $(TARGET) $(DISK_IMG) disasm
 	$(QEMU_BASE) $(QEMU_DISK)

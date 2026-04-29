@@ -54,12 +54,7 @@ Thread::Thread(Process* parent, uint64_t entry, uint64_t userStack,
     m_trapFrame->sp = userStack;
     m_trapFrame->tp = tls;
     m_trapFrame->a0 = 0;
-    if (userStack != 0) {
-        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
-        uint64_t jw_addr = *(uint64_t*)(userStack + 16);
-        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
-        m_clearTidAddr = jw_addr;
-    }
+    m_clearTidAddr = (uint64_t)clearTidPtr;
     if (childTidPtr) {
         RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         *childTidPtr = (int)m_pid;

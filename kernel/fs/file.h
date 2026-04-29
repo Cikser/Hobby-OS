@@ -22,6 +22,7 @@ public:
     int write(const void* buf, uint64_t len);
     int64_t seek(int64_t offset, uint32_t whence);
     uint64_t tell() const;
+    uint32_t flags() const { return m_flags; }
     void close();
     int fstat(InodeStat* st) const;
 

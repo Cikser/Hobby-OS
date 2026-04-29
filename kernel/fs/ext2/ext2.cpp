@@ -658,8 +658,9 @@ int Ext2Inode::stat(InodeStat* out) {
 }
 
 int Ext2Inode::read(uint64_t offset, void* buf, uint64_t len) {
-    if (!buf || len == 0) return -1;
-    if (offset >= m_raw.i_size) return -1;
+    if (!buf) return -1;
+    if (len == 0) return 0;
+    if (offset >= m_raw.i_size) return 0;
     if (isDir()) return -1;
     if (offset + len > m_raw.i_size)
         len = m_raw.i_size - offset;

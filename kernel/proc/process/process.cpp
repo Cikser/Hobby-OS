@@ -70,7 +70,10 @@ void Process::clear() {
     }
     delete m_mmap;
     delete m_segTable;
-    delete m_cwdPath;
+    if (m_cwdPath) {
+        MemoryAllocator::kfree(m_cwdPath);
+        m_cwdPath = nullptr;
+    }
     VM::destroyPMT(m_pmt);
     /*if (m_signalHandler && m_signalHandler->release()) {
         delete m_signalHandler;
@@ -187,24 +190,6 @@ Process* Process::fork() {
     auto child = new Process(pmt, -1, this, childFds);
     child->m_signalHandler = m_signalHandler->clone();
     child->m_sigMask = m_sigMask;
-    uint64_t childStackVa = USER_STACK_TOP -
-        child->m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
-        - USER_STACK_SIZE;
-
-    uint64_t constructorPa = child->m_pmt->translate(childStackVa);
-    if (constructorPa) {
-        child->m_pmt->unmapPage(childStackVa);
-        MemoryAllocator::kfreePage((void*)MemoryLayout::p2v(constructorPa));
-    }
-
-    uint64_t parentStackVa = USER_STACK_TOP -
-        m_pid * (USER_STACK_SIZE + MemoryLayout::PAGE_SIZE)
-        - USER_STACK_SIZE;
-
-    uint64_t sharedPa = pmt->translate(parentStackVa);
-    child->m_ustack = sharedPa
-        ? (uint8_t*)MemoryLayout::p2v(sharedPa)
-        : m_ustack;
 
     memcpy(child->m_trapFrame, m_trapFrame, sizeof(TrapFrame));
     child->m_entry = m_trapFrame->sepc;
@@ -580,7 +565,6 @@ Thread* Process::cloneThread(uint64_t entry, uint64_t userStack, uint64_t tls,
     t->m_nextThread = m_threads;
     m_threads = t;
     m_lock.release();
-    m_trapFrame->a0 = 0;
 
     return t;
 }

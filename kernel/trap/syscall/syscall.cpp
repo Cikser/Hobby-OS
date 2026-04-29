@@ -11,6 +11,9 @@
 #include "../../proc/sync/futex.h"
 #include "../../proc/thread/thread.h"
 
+static constexpr int LINUX_EFAULT = 14;
+static constexpr int LINUX_ENOENT = 2;
+
 void SyscallHandler::handle(TrapFrame* tf) {
     switch (tf->a7) {
     case SYS_EXIT: tf->a0 = sys_exit(tf); break;
@@ -98,6 +101,25 @@ static char* copyPathFromUser(uint64_t userAddr) {
     return result;
 }
 
+static bool validateUserBufferByPte(Process* proc, uint64_t addr, uint64_t len, uint32_t op) {
+    if (!proc) return false;
+    if (len == 0) return true;
+    if (addr > addr + len - 1) return false;
+
+    const uint64_t pageMask = MemoryLayout::PAGE_SIZE - 1;
+    uint64_t page = addr & ~pageMask;
+    uint64_t last = (addr + len - 1) & ~pageMask;
+
+    while (true) {
+        uint64_t flags = proc->pmt()->getFlags(page);
+        if (!(flags & PMT::PAGE_V) || !(flags & PMT::PAGE_U) || (flags & op) != op)
+            return false;
+        if (page == last) break;
+        page += MemoryLayout::PAGE_SIZE;
+    }
+    return true;
+}
+
 uint64_t SyscallHandler::sys_getpid(TrapFrame* tf) {
     return PCB::runningProcess()->pid();
 }
@@ -117,15 +139,17 @@ uint64_t SyscallHandler::sys_clone(TrapFrame* tf) {
     Process* proc = PCB::runningProcess();
 
     if (flags & CLONE_THREAD) {
-        if (!(flags & CLONE_VM))    return (uint64_t)-1;
-        if (childStack == 0)        return (uint64_t)-1;
+        if (!(flags & CLONE_VM)) return (uint64_t)-1;
+        if (childStack == 0) return (uint64_t)-1;
 
         if (parentTid &&
-            !proc->checkOperation((uint64_t)parentTid, sizeof(int), SegmentDesc::SEG_W))
+            !proc->checkOperation((uint64_t)parentTid, sizeof(int), SegmentDesc::SEG_W) &&
+            !validateUserBufferByPte(proc, (uint64_t)parentTid, sizeof(int), SegmentDesc::SEG_W))
             return (uint64_t)-1;
 
         if (childTid &&
-            !proc->checkOperation((uint64_t)childTid, sizeof(int), SegmentDesc::SEG_W))
+            !proc->checkOperation((uint64_t)childTid, sizeof(int), SegmentDesc::SEG_W) &&
+            !validateUserBufferByPte(proc, (uint64_t)childTid, sizeof(int), SegmentDesc::SEG_W))
             return (uint64_t)-1;
 
         int* clearTid = (flags & CLONE_CHILD_CLEARTID) ? childTid : nullptr;
@@ -135,7 +159,13 @@ uint64_t SyscallHandler::sys_clone(TrapFrame* tf) {
         Thread* t = proc->cloneThread(entry, childStack, tls,
                                        parentTid, childTid, clearTid);
         if (!t) return (uint64_t)-1;
-
+        memcpy(t->m_trapFrame, tf, sizeof(TrapFrame));
+        t->m_trapFrame->sepc = entry;
+        t->m_trapFrame->sp = childStack;
+        if (flags & CLONE_SETTLS)
+            t->m_trapFrame->tp = tls;
+        t->m_trapFrame->a0 = 0;
+        t->m_trapFrame->kstack = (uint64_t)t->m_kstack + PCB::KERNEL_STACK_SIZE;
         return t->pid();
     }
 
@@ -168,10 +198,12 @@ uint64_t SyscallHandler::sys_read(TrapFrame* tf) {
     uint64_t buf = tf->a1;
     uint64_t len = tf->a2;
 
-    if (!PCB::runningProcess()->checkOperation(buf, len, SegmentDesc::SEG_W))
+    Process* proc = PCB::runningProcess();
+    if (!proc->checkOperation(buf, len, SegmentDesc::SEG_W) &&
+        !validateUserBufferByPte(proc, buf, len, SegmentDesc::SEG_W))
         return -1;
 
-    File* file = PCB::runningProcess()->getFile(fd);
+    File* file = proc->getFile(fd);
     if (!file) return -1;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
@@ -193,9 +225,11 @@ uint64_t SyscallHandler::sys_openat(TrapFrame* tf) {
     uint64_t mode = tf->a3;
 
     AutoPath path(copyPathFromUser(filePath));
-    if (!path.valid()) return -1;
+    if (!path.valid()) return (uint64_t)-LINUX_EFAULT;
 
-    return PCB::runningProcess()->openFile(path, flags);
+    uint64_t fd = PCB::runningProcess()->openFile(path, flags);
+    if ((int64_t)fd < 0) return (uint64_t)-LINUX_ENOENT;
+    return fd;
 }
 
 uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
@@ -377,10 +411,6 @@ uint64_t SyscallHandler::sys_readv(TrapFrame* tf) {
         if (!iov[i].iov_base) {
             RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
             return -1;
-        }
-        if (!PCB::runningProcess()->checkOperation((uint64_t)iov[i].iov_base, iov[i].iov_len, SegmentDesc::SEG_R)) {
-            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
-            return total ? total : -1;
         }
         uint64_t read = file->read(iov[i].iov_base, iov[i].iov_len);
         if ((int64_t)read < 0) {
@@ -738,7 +768,7 @@ uint64_t SyscallHandler::sys_fcntl(TrapFrame* tf) {
             return 0;
 
         case F_GETFL:
-            return (uint64_t)File::O_RDWR;
+            return (uint64_t)file->flags();
 
         case F_SETFL:
             return 0;

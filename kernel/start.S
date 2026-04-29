@@ -62,6 +62,9 @@ _start:
     la   t0, m_stack_top
     csrw mscratch, t0
 
+    li t0, 0x00002000
+    csrs sstatus, t0
+
     mret
 
 .halt:

@@ -1188,12 +1188,20 @@ uint64_t SyscallHandler::sys_getrandom(TrapFrame* tf) {
             (uint64_t)buf, len, SegmentDesc::SEG_W))
         return (uint64_t)-14;
 
+    static uint64_t s_counter = 0;
+    s_counter++;
+
     auto* dst = (uint8_t*)buf;
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     for (uint64_t i = 0; i < len; i++) {
-        uint64_t val = TrapHandler::getTicks() ^ ((uint64_t)i * 6364136223846793005ULL);
+        uint64_t val = TrapHandler::getTicks();
+        val ^= s_counter * 6364136223846793005ULL;
+        val ^= (uint64_t)buf * 2654435761ULL;
+        val ^= i * 0xff51afd7ed558ccdULL;
         val ^= (val >> 33);
         val *= 0xff51afd7ed558ccdULL;
+        val ^= (val >> 33);
+        val *= 0xc4ceb9fe1a85ec53ULL;
         val ^= (val >> 33);
         dst[i] = (uint8_t)(val & 0xFF);
     }
@@ -1236,19 +1244,20 @@ uint64_t SyscallHandler::sys_statx(TrapFrame* tf) {
         uint32_t stx_uid;
         uint32_t stx_gid;
         uint16_t stx_mode;
-        uint16_t _pad1;
+        uint16_t _pad1[3];
         uint64_t stx_ino;
         uint64_t stx_size;
         uint64_t stx_blocks;
         uint64_t stx_attributes_mask;
-        uint32_t stx_atime_sec; uint32_t stx_atime_nsec;
-        uint32_t _pad2[2];
-        uint32_t stx_mtime_sec; uint32_t stx_mtime_nsec;
-        uint32_t _pad3[2];
-        uint32_t stx_ctime_sec; uint32_t stx_ctime_nsec;
-        uint32_t _pad4[2];
-        uint32_t stx_btime_sec; uint32_t stx_btime_nsec;
-        uint32_t _pad5[48];
+        struct { int64_t sec; uint32_t nsec; uint32_t pad; } stx_atime;
+        struct { int64_t sec; uint32_t nsec; uint32_t pad; } stx_btime;
+        struct { int64_t sec; uint32_t nsec; uint32_t pad; } stx_ctime;
+        struct { int64_t sec; uint32_t nsec; uint32_t pad; } stx_mtime;
+        uint32_t stx_rdev_major;
+        uint32_t stx_rdev_minor;
+        uint32_t stx_dev_major;
+        uint32_t stx_dev_minor;
+        uint64_t _spare[14];
     };
 
     if (!statxbuf) return (uint64_t)-22;

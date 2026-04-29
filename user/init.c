@@ -3144,6 +3144,226 @@ static void test_signal_stress(void) {
     check(ok, "all children terminated by SIGTERM and reaped");
 }
 
+static void test_madvise(void) {
+    section("84. madvise");
+
+    void* p = mmap((void*)0, 4096 * 4, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    check(p != MAP_FAILED, "mmap for madvise test");
+    if (p == MAP_FAILED) return;
+
+    memset(p, 0xAA, 4096 * 4);
+
+    int r = madvise(p, 4096 * 4, MADV_NORMAL);
+    check(r == 0, "madvise MADV_NORMAL returns 0");
+
+    r = madvise(p, 4096 * 4, MADV_DONTNEED);
+    check(r == 0, "madvise MADV_DONTNEED returns 0");
+
+    r = madvise(p, 4096 * 4, MADV_FREE);
+    check(r == 0, "madvise MADV_FREE returns 0");
+
+    r = madvise((void*)0, 4096, MADV_NORMAL);
+    check(r == 0, "madvise NULL addr returns 0 (kernel ignores)");
+
+    r = madvise((char*)p + 1, 4096, MADV_NORMAL);
+    check(r == 0 || r < 0, "madvise unaligned does not crash");
+
+    munmap(p, 4096 * 4);
+}
+
+/* ------------------------------------------------------------------ */
+/*  85. prlimit64                                                       */
+/* ------------------------------------------------------------------ */
+
+static void test_prlimit(void) {
+    section("85. prlimit64");
+
+    struct rlimit lim;
+
+    int r = prlimit(0, RLIMIT_STACK, (struct rlimit*)0, &lim);
+    check(r == 0, "prlimit RLIMIT_STACK returns 0");
+    check(lim.rlim_cur > 0, "RLIMIT_STACK cur > 0");
+    check(lim.rlim_max > 0, "RLIMIT_STACK max > 0");
+    printf("    RLIMIT_STACK: cur=%llu max=%llu\n",
+           (unsigned long long)lim.rlim_cur,
+           (unsigned long long)lim.rlim_max);
+
+    r = prlimit(0, RLIMIT_NOFILE, (struct rlimit*)0, &lim);
+    check(r == 0, "prlimit RLIMIT_NOFILE returns 0");
+    check(lim.rlim_cur > 0, "RLIMIT_NOFILE cur > 0");
+    printf("    RLIMIT_NOFILE: cur=%llu max=%llu\n",
+           (unsigned long long)lim.rlim_cur,
+           (unsigned long long)lim.rlim_max);
+
+    r = prlimit(0, RLIMIT_AS, (struct rlimit*)0, &lim);
+    check(r == 0, "prlimit RLIMIT_AS returns 0");
+    printf("    RLIMIT_AS: cur=%llu max=%llu\n",
+           (unsigned long long)lim.rlim_cur,
+           (unsigned long long)lim.rlim_max);
+
+    r = prlimit(0, RLIMIT_STACK, (struct rlimit*)0, (struct rlimit*)0);
+    check(r == 0, "prlimit NULL old_lim returns 0");
+
+    r = prlimit(0, RLIMIT_STACK, (struct rlimit*)0, (struct rlimit*)0x10);
+    check(r < 0, "prlimit bad ptr fails");
+
+    r = prlimit(0, 999, (struct rlimit*)0, &lim);
+    check(r == 0, "prlimit unknown resource returns 0 (infinity)");
+    check(lim.rlim_cur == RLIM_INFINITY, "unknown resource returns RLIM_INFINITY");
+}
+
+/* ------------------------------------------------------------------ */
+/*  86. getrandom                                                       */
+/* ------------------------------------------------------------------ */
+
+static void test_getrandom(void) {
+    section("86. getrandom");
+
+    uint8_t buf1[32];
+    ssize_t r = getrandom(buf1, 32, 0);
+    check(r == 32, "getrandom 32 bytes returns 32");
+
+    int all_zero = 1;
+    for (int i = 0; i < 32; i++) if (buf1[i] != 0) { all_zero = 0; break; }
+    check(!all_zero, "getrandom output is not all zeros");
+
+    uint8_t buf2[32];
+    getrandom(buf2, 32, 0);
+    int same = 1;
+    for (int i = 0; i < 32; i++) if (buf1[i] != buf2[i]) { same = 0; break; }
+    check(!same, "two getrandom calls return different data");
+
+    uint8_t one = 0;
+    r = getrandom(&one, 1, 0);
+    check(r == 1, "getrandom 1 byte returns 1");
+
+    uint8_t buf3[16];
+    r = getrandom(buf3, 16, GRND_NONBLOCK);
+    check(r == 16, "getrandom GRND_NONBLOCK returns 16");
+
+    uint8_t big[256];
+    r = getrandom(big, 256, 0);
+    check(r == 256, "getrandom 256 bytes returns 256");
+
+    r = getrandom((void*)0, 16, 0);
+    check(r < 0, "getrandom NULL buf fails");
+
+    r = getrandom(buf1, 0, 0);
+    check(r < 0, "getrandom len=0 fails");
+
+    r = getrandom((void*)0xDEAD, 16, 0);
+    check(r < 0, "getrandom bad ptr fails");
+}
+
+/* ------------------------------------------------------------------ */
+/*  87. statx                                                           */
+/* ------------------------------------------------------------------ */
+
+static void test_statx(void) {
+    section("87. statx");
+
+    struct statx sx;
+
+    int r = statx(AT_FDCWD, "/readme.txt", 0, STATX_ALL, &sx);
+    check(r == 0, "statx /readme.txt returns 0");
+    check(sx.stx_ino > 0,  "statx stx_ino > 0");
+    check(sx.stx_size > 0, "statx stx_size > 0");
+    check((sx.stx_mode & 0xF000) == 0x8000, "statx mode is regular file");
+    printf("    statx: ino=%llu size=%llu mode=0x%x\n",
+           (unsigned long long)sx.stx_ino,
+           (unsigned long long)sx.stx_size,
+           sx.stx_mode);
+
+    uint64_t readme_ino  = sx.stx_ino;
+    uint64_t readme_size = sx.stx_size;
+
+    struct statx sx_dir;
+    r = statx(AT_FDCWD, "/", 0, STATX_ALL, &sx_dir);
+    check(r == 0, "statx / returns 0");
+    check((sx_dir.stx_mode & 0xF000) == 0x4000, "statx / mode is directory");
+
+    int fd = open("/readme.txt", O_RDONLY);
+    check(fd >= 0, "open for statx AT_EMPTY_PATH");
+    if (fd >= 0) {
+        struct statx sx2;
+        r = statx(fd, "", AT_EMPTY_PATH, STATX_ALL, &sx2);
+        check(r == 0, "statx AT_EMPTY_PATH on fd returns 0");
+        check(sx2.stx_ino == readme_ino,
+              "statx AT_EMPTY_PATH ino matches path-based statx");
+        close(fd);
+    }
+
+    r = statx(AT_FDCWD, "/nonexistent_xyz.txt", 0, STATX_ALL, &sx);
+    check(r < 0, "statx nonexistent returns error");
+
+    r = statx(AT_FDCWD, "/readme.txt", 0, STATX_ALL, (struct statx*)0);
+    check(r < 0, "statx NULL buf fails");
+
+    r = statx(AT_FDCWD, "/readme.txt", 0, STATX_ALL, (struct statx*)0x10);
+    check(r < 0, "statx bad buf ptr fails");
+
+    r = statx(AT_FDCWD, (const char*)0, 0, STATX_ALL, &sx);
+    check(r < 0, "statx NULL path fails");
+
+    fd = open("/readme.txt", O_RDONLY);
+    if (fd >= 0) {
+        struct stat st;
+        fstat(fd, &st);
+        struct statx sx3;
+        statx(fd, "", AT_EMPTY_PATH, STATX_ALL, &sx3);
+        check(sx3.stx_ino  == st.st_ino,
+              "statx ino matches fstat ino");
+        check(sx3.stx_size == (uint64_t)st.st_size,
+              "statx size matches fstat size");
+        close(fd);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  88. membarrier                                                      */
+/* ------------------------------------------------------------------ */
+
+static void test_membarrier(void) {
+    section("88. membarrier");
+
+    int r = membarrier(0, 0, 0);
+    check(r >= 0, "membarrier QUERY returns >= 0");
+
+    r = membarrier(1, 0, 0);
+    check(r == 0, "membarrier GLOBAL returns 0");
+
+    r = membarrier(999, 0, 0);
+    check(r == 0, "membarrier unknown cmd returns 0 (stub)");
+}
+
+/* ------------------------------------------------------------------ */
+/*  89. ioctl basic                                                     */
+/* ------------------------------------------------------------------ */
+
+static void test_ioctl(void) {
+    section("89. ioctl");
+
+    int r = ioctl(STDOUT_FILENO, TIOCGWINSZ, 0);
+    check(r < 0, "ioctl TIOCGWINSZ on stdout returns error (not a tty)");
+
+    r = ioctl(STDOUT_FILENO, TCGETS, 0);
+    check(r < 0, "ioctl TCGETS on stdout returns error");
+
+    r = ioctl(STDIN_FILENO, FIONREAD, 0);
+    check(r < 0, "ioctl FIONREAD on stdin returns error");
+
+    r = ioctl(-1, TIOCGWINSZ, 0);
+    check(r < 0, "ioctl on bad fd returns error");
+
+    int fd = open("/readme.txt", O_RDONLY);
+    if (fd >= 0) {
+        r = ioctl(fd, TIOCGWINSZ, 0);
+        check(r < 0, "ioctl TIOCGWINSZ on regular file returns error");
+        close(fd);
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
@@ -3240,6 +3460,12 @@ void _start() {
     test_sigaction_query();
     test_sigchld();
     test_signal_stress();
+    test_madvise();
+    test_prlimit();
+    test_getrandom();
+    test_statx();
+    test_membarrier();
+    test_ioctl();
 
     print_summary();
     exit(0);

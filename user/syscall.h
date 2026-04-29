@@ -69,6 +69,12 @@ typedef void*              mmap_ptr_t;
 #define SYS_RT_SIGPROCMASK  135
 #define SYS_RT_SIGPENDING   136
 #define SYS_RT_SIGRETURN    139
+#define SYS_MADVISE         233
+#define SYS_PRLIMIT64       261
+#define SYS_GETRANDOM       278
+#define SYS_MEMBARRIER      283
+#define SYS_STATX           291
+#define SYS_RSEQ            293
 
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
@@ -129,6 +135,31 @@ typedef void*              mmap_ptr_t;
 
 #define WIFEXITED(s)   (((s) & 0x7f) == 0)
 #define WEXITSTATUS(s) (((s) >> 8) & 0xff)
+
+#define RLIMIT_STACK  3
+#define RLIMIT_NOFILE 7
+#define RLIMIT_AS     9
+#define RLIM_INFINITY (~0ULL)
+
+#define MADV_NORMAL     0
+#define MADV_DONTNEED   4
+#define MADV_FREE       8
+
+#define GRND_NONBLOCK 0x1
+#define GRND_RANDOM   0x2
+
+#define STATX_TYPE    0x00000001U
+#define STATX_MODE    0x00000002U
+#define STATX_NLINK   0x00000004U
+#define STATX_UID     0x00000008U
+#define STATX_GID     0x00000010U
+#define STATX_SIZE    0x00000200U
+#define STATX_BLOCKS  0x00000400U
+#define STATX_ALL     0x00000FFFU
+
+#define TIOCGWINSZ 0x5413
+#define TCGETS 0x5401
+#define FIONREAD 0x541B
 
 #define NULL ((void*)0)
 
@@ -718,6 +749,69 @@ static inline void sem_wait(sem_t* s) {
 static inline void sem_post(sem_t* s) {
     __sync_fetch_and_add(&s->count, 1);
     futex(&s->count, FUTEX_WAKE, 1, 0);
+}
+
+
+struct statx_timestamp {
+    int64_t  tv_sec;
+    uint32_t tv_nsec;
+    uint32_t _pad;
+};
+
+struct statx {
+    uint32_t stx_mask;
+    uint32_t stx_blksize;
+    uint64_t stx_attributes;
+    uint32_t stx_nlink;
+    uint32_t stx_uid;
+    uint32_t stx_gid;
+    uint16_t stx_mode;
+    uint16_t _pad1[3];
+    uint64_t stx_ino;
+    uint64_t stx_size;
+    uint64_t stx_blocks;
+    uint64_t stx_attributes_mask;
+    struct statx_timestamp stx_atime;
+    struct statx_timestamp stx_btime;
+    struct statx_timestamp stx_ctime;
+    struct statx_timestamp stx_mtime;
+    uint32_t stx_rdev_major;
+    uint32_t stx_rdev_minor;
+    uint32_t stx_dev_major;
+    uint32_t stx_dev_minor;
+    uint64_t _spare[14];
+};
+
+struct rlimit {
+    uint64_t rlim_cur;
+    uint64_t rlim_max;
+};
+
+static inline int madvise(void* addr, size_t len, int advice) {
+    return (int)_SC3(SYS_MADVISE, addr, len, advice);
+}
+
+static inline int prlimit(pid_t pid, int resource,
+                           const struct rlimit* new_lim,
+                           struct rlimit* old_lim) {
+    return (int)_SC4(SYS_PRLIMIT64, pid, resource, new_lim, old_lim);
+}
+
+static inline ssize_t getrandom(void* buf, size_t len, unsigned int flags) {
+    return (ssize_t)_SC3(SYS_GETRANDOM, buf, len, flags);
+}
+
+static inline int statx(int dirfd, const char* path, int flags,
+                         unsigned int mask, struct statx* buf) {
+    return (int)_SC5(SYS_STATX, dirfd, path, flags, mask, buf);
+}
+
+static inline int membarrier(int cmd, int flags, int cpu_id) {
+    return (int)_SC3(SYS_MEMBARRIER, cmd, flags, cpu_id);
+}
+
+static inline int ioctl(int fd, unsigned long req, unsigned long arg) {
+    return (int)_SC3(SYS_IOCTL, fd, req, arg);
 }
 
 static inline size_t strlen(const char* s) {

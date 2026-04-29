@@ -68,6 +68,13 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_RT_SIGPROCMASK: tf->a0 = sys_rt_sigprocmask(tf); break;
     case SYS_RT_SIGPENDING: tf->a0 = sys_rt_sigpending(tf); break;
     case SYS_RT_SIGRETURN: tf->a0 = sys_rt_sigreturn(tf); break;
+    case SYS_MADVISE: tf->a0 = sys_madvise(tf); break;
+    case SYS_PRLIMIT64: tf->a0 = sys_prlimit64(tf); break;
+    case SYS_GETRANDOM: tf->a0 = sys_getrandom(tf); break;
+    case SYS_RSEQ: tf->a0 = (uint64_t)-38; break;
+    case SYS_MEMBARRIER: tf->a0 = 0; break;
+    case SYS_STATX: tf->a0 = sys_statx(tf); break;
+    case SYS_IOCTL: tf->a0 = sys_ioctl(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -1114,5 +1121,192 @@ uint64_t SyscallHandler::sys_rt_sigpending(TrapFrame* tf) {
 }
 
 uint64_t SyscallHandler::sys_sigaltstack(TrapFrame* tf) {
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_madvise(TrapFrame* tf) {
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_prlimit64(TrapFrame* tf) {
+    pid_t pid = (pid_t)(int64_t)tf->a0;
+    int resource = (int)(int64_t)tf->a1;
+    uint64_t new_lim = tf->a2;
+    uint64_t old_lim = tf->a3;
+
+    struct rlimit {
+        uint64_t rlim_cur;
+        uint64_t rlim_max;
+    };
+
+    static constexpr uint64_t RLIM_INFINITY = ~0ULL;
+    static constexpr int RLIMIT_STACK = 3;
+    static constexpr int RLIMIT_NOFILE = 7;
+    static constexpr int RLIMIT_AS = 9;
+
+    if (old_lim) {
+        if (!PCB::runningProcess()->checkOperation(
+                old_lim, sizeof(rlimit), SegmentDesc::SEG_W))
+            return (uint64_t)-14;
+
+        rlimit lim;
+        switch (resource) {
+            case RLIMIT_STACK:
+                lim.rlim_cur = PCB::USER_STACK_SIZE;
+                lim.rlim_max = PCB::USER_STACK_SIZE;
+                break;
+            case RLIMIT_NOFILE:
+                lim.rlim_cur = FdTable::MAX_FDS;
+                lim.rlim_max = FdTable::MAX_FDS;
+                break;
+            case RLIMIT_AS:
+                lim.rlim_cur = RLIM_INFINITY;
+                lim.rlim_max = RLIM_INFINITY;
+                break;
+            default:
+                lim.rlim_cur = RLIM_INFINITY;
+                lim.rlim_max = RLIM_INFINITY;
+                break;
+        }
+
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        *((rlimit*)old_lim) = lim;
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+    }
+
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_getrandom(TrapFrame* tf) {
+    void* buf = (void*)tf->a0;
+    uint64_t len = tf->a1;
+    uint32_t flags = (uint32_t)tf->a2;
+
+    if (!buf || len == 0) return (uint64_t)-22;
+
+    if (!PCB::runningProcess()->checkOperation(
+            (uint64_t)buf, len, SegmentDesc::SEG_W))
+        return (uint64_t)-14;
+
+    auto* dst = (uint8_t*)buf;
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    for (uint64_t i = 0; i < len; i++) {
+        uint64_t val = TrapHandler::getTicks() ^ ((uint64_t)i * 6364136223846793005ULL);
+        val ^= (val >> 33);
+        val *= 0xff51afd7ed558ccdULL;
+        val ^= (val >> 33);
+        dst[i] = (uint8_t)(val & 0xFF);
+    }
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    return len;
+}
+
+uint64_t SyscallHandler::sys_ioctl(TrapFrame* tf) {
+    int fd  = (int)(int64_t)tf->a0;
+    uint64_t req = tf->a1;
+
+    static constexpr uint64_t TCGETS = 0x5401;
+    static constexpr uint64_t TIOCGWINSZ = 0x5413;
+    static constexpr uint64_t FIONREAD = 0x541B;
+
+    switch (req) {
+        case TCGETS:
+        case TIOCGWINSZ:
+            return (uint64_t)-25;
+        case FIONREAD:
+            return (uint64_t)-25;
+        default:
+            return (uint64_t)-25;
+    }
+}
+
+uint64_t SyscallHandler::sys_statx(TrapFrame* tf) {
+    int dirfd = (int)(int64_t)tf->a0;
+    uint64_t pathAddr = tf->a1;
+    int flags = (int)(int64_t)tf->a2;
+    uint32_t mask = (uint32_t)tf->a3;
+    uint64_t statxbuf = tf->a4;
+
+    struct statx_t {
+        uint32_t stx_mask;
+        uint32_t stx_blksize;
+        uint64_t stx_attributes;
+        uint32_t stx_nlink;
+        uint32_t stx_uid;
+        uint32_t stx_gid;
+        uint16_t stx_mode;
+        uint16_t _pad1;
+        uint64_t stx_ino;
+        uint64_t stx_size;
+        uint64_t stx_blocks;
+        uint64_t stx_attributes_mask;
+        uint32_t stx_atime_sec; uint32_t stx_atime_nsec;
+        uint32_t _pad2[2];
+        uint32_t stx_mtime_sec; uint32_t stx_mtime_nsec;
+        uint32_t _pad3[2];
+        uint32_t stx_ctime_sec; uint32_t stx_ctime_nsec;
+        uint32_t _pad4[2];
+        uint32_t stx_btime_sec; uint32_t stx_btime_nsec;
+        uint32_t _pad5[48];
+    };
+
+    if (!statxbuf) return (uint64_t)-22;
+    if (!PCB::runningProcess()->checkOperation(
+            statxbuf, sizeof(statx_t), SegmentDesc::SEG_W))
+        return (uint64_t)-14;
+
+    VfsInode* inode = nullptr;
+
+    static constexpr int AT_EMPTY_PATH_LOCAL = 0x1000;
+    if (flags & AT_EMPTY_PATH_LOCAL) {
+        if (dirfd >= 0) {
+            File* f = PCB::runningProcess()->getFile(dirfd);
+            if (!f) return (uint64_t)-9;
+            InodeStat ist;
+            f->fstat(&ist);
+
+            RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+            auto* sx = (statx_t*)statxbuf;
+            memset(sx, 0, sizeof(statx_t));
+            sx->stx_mask = mask;
+            sx->stx_ino = ist.st_ino;
+            sx->stx_mode = (uint16_t)ist.st_mode;
+            sx->stx_nlink = ist.st_nlink;
+            sx->stx_uid = ist.st_uid;
+            sx->stx_gid = ist.st_gid;
+            sx->stx_size = (uint64_t)ist.st_size;
+            sx->stx_blksize = ist.st_blksize;
+            sx->stx_blocks = (uint64_t)ist.st_blocks;
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return 0;
+        }
+    }
+
+    AutoPath path(copyPathFromUser(pathAddr));
+    if (!path.valid()) return (uint64_t)-14;
+
+    inode = VFS::resolvePath(path);
+    if (!inode) return (uint64_t)-2;
+
+    InodeStat ist;
+    inode->stat(&ist);
+    uint32_t inum = inode->inodeNum();
+    VFS::putInode(inode, inum);
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    auto* sx = (statx_t*)statxbuf;
+    memset(sx, 0, sizeof(statx_t));
+    sx->stx_mask = mask;
+    sx->stx_ino = ist.st_ino;
+    sx->stx_mode = (uint16_t)ist.st_mode;
+    sx->stx_nlink = ist.st_nlink;
+    sx->stx_uid = ist.st_uid;
+    sx->stx_gid = ist.st_gid;
+    sx->stx_size = (uint64_t)ist.st_size;
+    sx->stx_blksize = ist.st_blksize;
+    sx->stx_blocks = (uint64_t)ist.st_blocks;
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
     return 0;
 }

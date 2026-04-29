@@ -60,7 +60,13 @@ enum Syscall {
     SYS_EXECVE = 221,
     SYS_MMAP = 222,
     SYS_MPROTECT = 226,
+    SYS_MADVISE = 233,
     SYS_WAIT4 = 260,
+    SYS_PRLIMIT64 = 261,
+    SYS_GETRANDOM = 278,
+    SYS_RSEQ = 293,
+    SYS_MEMBARRIER = 283,
+    SYS_STATX = 291,
 };
 
 class SyscallHandler {
@@ -123,6 +129,13 @@ private:
     static uint64_t sys_rt_sigreturn(TrapFrame* tf);
     static uint64_t sys_rt_sigpending(TrapFrame* tf);
     static uint64_t sys_sigaltstack(TrapFrame* tf);
+    static uint64_t sys_madvise(TrapFrame* tf);
+    static uint64_t sys_prlimit64(TrapFrame* tf);
+    static uint64_t sys_getrandom(TrapFrame* tf);
+    static uint64_t sys_rseq(TrapFrame* tf);
+    static uint64_t sys_membarrier(TrapFrame* tf);
+    static uint64_t sys_statx(TrapFrame* tf);
+    static uint64_t sys_ioctl(TrapFrame* tf);
 };
 
 #endif

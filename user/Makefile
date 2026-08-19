@@ -2,7 +2,10 @@ ARCH := riscv64-unknown-elf
 CC   := $(ARCH)-gcc
 LD   := $(ARCH)-ld
 
-MUSL_CC := $(HOME)/CLionProjects/musl/bin/riscv64-linux-musl-gcc
+ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+LIBC_DIR := $(ROOT_DIR)/libc
+
+MUSL_CC := $(LIBC_DIR)/bin/riscv64-linux-musl-gcc
 MUSL_FLAGS := -static -march=rv64gc -mabi=lp64d
 
 CFLAGS := -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
@@ -13,6 +16,11 @@ init.elf: init.c init.ld syscall.h
 	$(LD) -T init.ld -o init.elf init.o
 
 hello_musl: hello_musl.c
+	@if [ ! -x "$(MUSL_CC)" ]; then \
+		echo "musl toolchain not found at $(MUSL_CC)"; \
+		echo "run: ./scripts/install_musl.sh"; \
+		exit 1; \
+	fi
 	$(MUSL_CC) $(MUSL_FLAGS) -o hello_musl hello_musl.c
 
 clean:

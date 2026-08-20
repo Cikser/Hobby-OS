@@ -82,7 +82,8 @@ void Process::clear() {
     PCB::clear();
 }
 
-uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16) const {
+uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16,
+                                    char* argv[], char* envp[]) const {
     uint8_t* stackTop = m_ustack + USER_STACK_SIZE;
     uint8_t* p = stackTop;
 
@@ -91,18 +92,58 @@ uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo
         *(uint64_t*)p = val;
     };
 
-    size_t pathLen = strlen(path) + 1;
-    p -= pathLen;
-    memcpy(p, path, pathLen);
-    uint64_t argv0_addr = USER_STACK_TOP - (stackTop - p);
+    auto getVirtAddr = [&](uint8_t* ptr) -> uint64_t {
+        return USER_STACK_TOP - (stackTop - ptr);
+    };
+
+    int32_t argc = 0;
+    if (argv) {
+        while (argv[argc]) argc++;
+    }
+
+    int32_t envc = 0;
+    if (envp) {
+        while (envp[envc]) envc++;
+    }
+
+    uint64_t argv_addrs[argc > 0 ? argc : 1];
+    uint64_t envp_addrs[envc > 0 ? envc : 1];
+
+    if (argc == 0) {
+        size_t len = strlen(path) + 1;
+        p -= len;
+        memcpy(p, path, len);
+        argv_addrs[0] = getVirtAddr(p);
+        argc = 1;
+    }
+    else {
+        for (int32_t i = envc - 1; i >= 0; i--) {
+            size_t len = strlen(envp[i]) + 1;
+            p -= len;
+            memcpy(p, envp[i], len);
+            envp_addrs[i] = getVirtAddr(p);
+        }
+
+        for (int i = argc - 1; i >= 0; i--) {
+            size_t len = strlen(argv[i]) + 1;
+            p -= len;
+            memcpy(p, argv[i], len);
+            argv_addrs[i] = getVirtAddr(p);
+        }
+    }
 
     p = (uint8_t*)((uint64_t)p & ~0xFULL);
 
     p -= 16;
     memcpy(p, randomBytes16, 16);
-    uint64_t at_random_addr = USER_STACK_TOP - (stackTop - p);
+    uint64_t at_random_addr = getVirtAddr(p);
+    
+    size_t wordsCount = (15 * 2) + (envc + 1) + (argc + 1) + 1;
 
-    p = (uint8_t*)((uint64_t)p & ~0xFULL);
+    uint64_t targetSp = (uint64_t)p - (wordsCount * 8);
+    if (targetSp % 16 != 0) {
+        p -= 8;
+    }
 
     push8(0); push8(0);
     push8(0); push8(23);
@@ -117,12 +158,18 @@ uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo
     push8(elfInfo.phnum); push8(5);
     push8(elfInfo.phent); push8(4);
     push8(elfInfo.phdr_va); push8(3);
-    push8(0);
 
     push8(0);
-    push8(argv0_addr);
+    for (int i = envc - 1; i >= 0; i--) {
+        push8(envp_addrs[i]);
+    }
 
-    push8(1);
+    push8(0);
+    for (int i = argc - 1; i >= 0; i--) {
+        push8(argv_addrs[i]);
+    }
+
+    push8(argc);
 
     uint64_t sp_offset = stackTop - p;
     return USER_STACK_TOP - sp_offset;
@@ -148,7 +195,7 @@ Process* Process::createInit() {
 
     uint8_t randomBytes[16] = {0};
 
-    uint64_t initialSp = proc->setupInitialStack("/bin/init", *info, randomBytes);
+    uint64_t initialSp = proc->setupInitialStack("/bin/init", *info, randomBytes, nullptr, nullptr);
 
     proc->m_entry = info->entry;
     proc->m_trapFrame->sepc = info->entry;
@@ -215,7 +262,7 @@ File* Process::getFile(int fd) const {
     return m_fdTable ? m_fdTable->get(fd) : nullptr;
 }
 
-int Process::exec(const char* elfPath) {
+int Process::exec(const char* elfPath, char* argv[], char* envp[]) {
     m_spaceLock.acquire();
     File* elf = VFS::open(elfPath, File::O_RDONLY);
     if (!elf) {
@@ -251,7 +298,7 @@ int Process::exec(const char* elfPath) {
         );
 
     uint8_t randomBytes[16] = {0};
-    uint64_t initialSp = setupInitialStack(elfPath, *info, randomBytes);
+    uint64_t initialSp = setupInitialStack(elfPath, *info, randomBytes, argv, envp);
 
     uint64_t oldKstack = m_trapFrame->kstack;
     memset(m_trapFrame, 0, sizeof(TrapFrame));

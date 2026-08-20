@@ -35,7 +35,7 @@ public:
     bool isProcess() override { return true; }
     pid_t ppid() const { return m_parent ? m_parent->m_pid : 0; }
     void clear() override;
-    int exec(const char* elfPath);
+    int exec(const char* elfPath, char* argv[] = nullptr, char* envp[] = nullptr);
     Process* fork();
     File* getFile(int fd) const;
     uint64_t brk(uint64_t newHeapEnd) const;
@@ -77,7 +77,8 @@ private:
             FdTable* fdTable = nullptr);
 
     static Process* findProcess(pid_t pid);
-    uint64_t setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16) const;
+    uint64_t setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16,
+                                char* argv[], char* evnp[]) const;
 
     Thread* m_threads;
     Process* m_parent;

@@ -101,6 +101,93 @@ static char* copyPathFromUser(uint64_t userAddr) {
     return result;
 }
 
+struct AutoArgv {
+    char** args{nullptr};
+
+    explicit AutoArgv(char** a) : args(a) {}
+    ~AutoArgv() {
+        if (args) {
+            for (int i = 0; args[i] != nullptr; i++) {
+                MemoryAllocator::kfree(args[i]);
+            }
+            MemoryAllocator::kfree(args);
+        }
+    }
+
+    AutoArgv(const AutoArgv&) = delete;
+    AutoArgv& operator=(const AutoArgv&) = delete;
+
+    operator char**() const { return args; }
+    bool valid() const { return args != nullptr; }
+};
+
+static char** copyArgvFromUser(uint64_t userAddr) {
+    if (!userAddr) return nullptr;
+
+    auto process = PCB::runningProcess();
+
+    if (!process->checkOperation(userAddr, sizeof(uint64_t), SegmentDesc::SEG_R))
+        return nullptr;
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+
+    uint64_t* userPtrArray = (uint64_t*)userAddr;
+    int count = 0;
+    
+    const int MAX_ARGS = 256; 
+    while (userPtrArray[count] != 0) {
+        count++;
+        if (count > MAX_ARGS) {
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return nullptr;
+        }
+    }
+
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    if (!process->checkOperation(userAddr, (count + 1) * sizeof(uint64_t), SegmentDesc::SEG_R))
+        return nullptr;
+
+    char** kargs = (char**)MemoryAllocator::kmalloc((count + 1) * sizeof(char*));
+    if (!kargs) return nullptr;
+
+    for (int i = 0; i < count; i++) {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        uint64_t strAddr = userPtrArray[i];
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+        if (!strAddr) {
+            kargs[i] = nullptr;
+            break;
+        }
+
+        if (!process->checkOperation(strAddr, 1, SegmentDesc::SEG_R)) {
+            for (int j = 0; j < i; j++) MemoryAllocator::kfree(kargs[j]);
+            MemoryAllocator::kfree(kargs);
+            return nullptr;
+        }
+
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+        kargs[i] = kstrdup_user((const char*)strAddr, PATH_MAX);
+        RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+        if (!kargs[i]) {
+            for (int j = 0; j < i; j++) MemoryAllocator::kfree(kargs[j]);
+            MemoryAllocator::kfree(kargs);
+            return nullptr;
+        }
+
+        if (!process->checkOperation(strAddr, strlen(kargs[i]), SegmentDesc::SEG_R)) {
+            for (int j = 0; j <= i; j++) MemoryAllocator::kfree(kargs[j]);
+            MemoryAllocator::kfree(kargs);
+            return nullptr;
+        }
+    }
+
+    kargs[count] = nullptr;
+    return kargs;
+}
+
 static bool validateUserBufferByPte(Process* proc, uint64_t addr, uint64_t len, uint32_t op) {
     if (!proc) return false;
     if (len == 0) return true;
@@ -239,11 +326,16 @@ uint64_t SyscallHandler::sys_close(TrapFrame* tf) {
 
 uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
     uint64_t pathAddr = tf->a0;
+    uint64_t argvAddr = tf->a1;
+    uint64_t envpAddr = tf->a2;
 
     AutoPath path(copyPathFromUser(pathAddr));
     if (!path.valid()) return -1;
 
-    return PCB::runningProcess()->exec(path);
+    AutoArgv argv(copyArgvFromUser(argvAddr));
+    AutoArgv envp(copyArgvFromUser(envpAddr));
+    
+    return PCB::runningProcess()->exec(path, argv, envp);
 }
 
 uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {

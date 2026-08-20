@@ -3370,7 +3370,7 @@ static void test_ioctl(void) {
 
 void _start() {
 
-    const char* argv[] = { "/bin/hello_musl", 0 };
+    const char* argv[] = { "/bin/hello_musl", "arg 1", "arg 2", 0 };
     const char* envp[] = { 0 };
     printf("entering hello_musl\n");
     execve("/bin/hello_musl", (char* const*)argv, (char* const*)envp);

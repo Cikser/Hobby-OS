@@ -337,7 +337,7 @@ static void test_pthread_mutex(void) {
 /* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
-int main(void) {
+int main(int argc, char **argv) {
     printf("\n*** MUSL LIBC TEST SUITE ***\n");
     printf("    pid=%d\n", getpid());
 
@@ -353,6 +353,10 @@ int main(void) {
     printf("\n========================================\n");
     printf("  SUMMARY: %d passed, %d failed\n", g_pass, g_fail);
     printf("========================================\n");
+
+    for (int i = 0; i < argc; i++) {
+        printf("%s\n", argv[i]);
+    }
 
     return g_fail > 0 ? 1 : 0;
 }

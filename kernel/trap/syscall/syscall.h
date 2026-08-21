@@ -15,6 +15,7 @@ enum Syscall {
     SYS_CHDIR = 49,
     SYS_OPENAT = 56,
     SYS_CLOSE = 57,
+    SYS_PIPE2 = 59,
     SYS_GETDENTS64 = 61,
     SYS_LSEEK = 62,
     SYS_READ = 63,
@@ -136,6 +137,7 @@ private:
     static uint64_t sys_membarrier(TrapFrame* tf);
     static uint64_t sys_statx(TrapFrame* tf);
     static uint64_t sys_ioctl(TrapFrame* tf);
+    static uint64_t sys_pipe2(TrapFrame* tf);
 };
 
 #endif

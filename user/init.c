@@ -3365,6 +3365,145 @@ static void test_ioctl(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  90. pipe / pipe2                                                    */
+/* ------------------------------------------------------------------ */
+
+static void test_pipe(void) {
+    section("90. pipe / pipe2");
+
+    int fds[2];
+    
+    /* 1. Basic pipe creation and close */
+    int r = pipe(fds);
+    check(r == 0, "pipe creation succeeds");
+    if (r == 0) {
+        check(fds[0] >= 0 && fds[1] >= 0, "pipe returns valid fds");
+        check(fds[0] != fds[1], "pipe fds are distinct");
+        close(fds[0]);
+        close(fds[1]);
+    }
+
+    /* 2. Basic read / write (single process) */
+    r = pipe(fds);
+    if (r == 0) {
+        const char* msg = "hello pipe!";
+        ssize_t w = write(fds[1], msg, 11);
+        check(w == 11, "write 11 bytes to pipe writer");
+
+        char buf[32];
+        ssize_t rd = read(fds[0], buf, 32);
+        check(rd == 11, "read 11 bytes from pipe reader");
+        if (rd > 0) buf[rd] = '\0';
+        check(strcmp(buf, msg) == 0, "pipe read data matches write data");
+
+        close(fds[0]);
+        close(fds[1]);
+    }
+
+    /* 3. Inter-process communication via fork */
+    r = pipe(fds);
+    if (r == 0) {
+        pid_t child = fork();
+        if (child == 0) {
+            /* Child closes read end, writes to pipe */
+            close(fds[0]);
+            file_write_str(fds[1], "child to parent");
+            close(fds[1]);
+            exit(0);
+        }
+
+        /* Parent closes write end, reads from pipe */
+        close(fds[1]);
+        char buf[64];
+        int total = file_read_all(fds[0], buf, sizeof(buf));
+        close(fds[0]);
+
+        int st = 0;
+        waitpid(child, &st);
+        check(st == 0, "pipe IPC child exited 0");
+        check(total == 15 && strcmp(buf, "child to parent") == 0, 
+              "parent received correct string from child via pipe");
+    }
+
+    /* 4. EOF detection when writer is closed */
+    r = pipe(fds);
+    if (r == 0) {
+        write(fds[1], "data", 4);
+        close(fds[1]); /* Close write end */
+
+        char buf[16];
+        ssize_t rd1 = read(fds[0], buf, 16);
+        check(rd1 == 4, "read buffered data before EOF");
+
+        ssize_t rd2 = read(fds[0], buf, 16);
+        check(rd2 == 0, "read on pipe with closed write end returns 0 (EOF)");
+
+        close(fds[0]);
+    }
+
+    /* 5. Invalid arguments / Bad pointers */
+    int bad_r = pipe((int*)0);
+    check(bad_r < 0, "pipe(NULL) fails");
+
+    bad_r = pipe((int*)0x1);
+    check(bad_r < 0, "pipe(unaligned/bad ptr) fails");
+
+    /* 6. pipe2 flags testing (O_CLOEXEC, O_NONBLOCK) */
+#ifdef O_NONBLOCK
+    r = pipe2(fds, O_NONBLOCK);
+    check(r == 0, "pipe2 with O_NONBLOCK succeeds");
+    if (r == 0) {
+        char buf[16];
+        ssize_t empty_rd = read(fds[0], buf, 16);
+        check(empty_rd < 0, "read on empty O_NONBLOCK pipe fails (EAGAIN/EWOULDBLOCK)");
+
+        close(fds[0]);
+        close(fds[1]);
+    }
+#endif
+
+    /* 7. Stress / Large Data Chunk transfer through Pipe */
+    r = pipe(fds);
+    if (r == 0) {
+        pid_t child = fork();
+        if (child == 0) {
+            close(fds[0]);
+            char chunk[1024];
+            memset(chunk, 0xAB, 1024);
+            /* Write 16KB of data */
+            for (int i = 0; i < 16; i++) {
+                write(fds[1], chunk, 1024);
+            }
+            close(fds[1]);
+            exit(0);
+        }
+
+        close(fds[1]);
+        char rbuf[1024];
+        int total_bytes = 0;
+        int pattern_ok = 1;
+
+        while (1) {
+            ssize_t n = read(fds[0], rbuf, 1024);
+            if (n <= 0) break;
+            total_bytes += n;
+            for (ssize_t i = 0; i < n; i++) {
+                if ((unsigned char)rbuf[i] != 0xAB) {
+                    pattern_ok = 0;
+                    break;
+                }
+            }
+        }
+        close(fds[0]);
+
+        int st = 0;
+        waitpid(child, &st);
+        check(total_bytes == 16 * 1024, "large pipe transfer: total bytes match (16KB)");
+        check(pattern_ok, "large pipe transfer: data pattern intact");
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -3475,6 +3614,7 @@ void _start() {
     test_statx();
     test_membarrier();
     test_ioctl();
+    test_pipe();
 
     print_summary();
     exit(0);

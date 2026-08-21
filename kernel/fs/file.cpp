@@ -11,6 +11,9 @@ File::File(const File& other, bool copyOffset)
 {
     if (m_inode && m_inode->inodeNum() != 0)
         InodeCache::acquire(m_mount, m_inode->inodeNum());
+    else if (m_inode) {
+        m_inode->onOpen(m_flags);
+    }
 }
 
 int File::read(void* buf, uint64_t len) {
@@ -76,6 +79,9 @@ void File::close() {
     }
     else if (m_mount) {
         m_mount->putInode(m_inode);
+    }
+    else {
+        m_inode->onClose(m_flags);
     }
     m_inode = nullptr;
     m_mount = nullptr;

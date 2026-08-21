@@ -19,6 +19,7 @@ typedef void*              mmap_ptr_t;
 #define SYS_CHDIR           49
 #define SYS_OPENAT          56
 #define SYS_CLOSE           57
+#define SYS_PIPE2           59
 #define SYS_LSEEK           62
 #define SYS_READ            63
 #define SYS_WRITE           64
@@ -448,6 +449,14 @@ static inline int dup2(int oldfd, int newfd) {
 
 static inline int dup3(int oldfd, int newfd, int flags) {
     return (int)_SC3(SYS_DUP3, oldfd, newfd, flags);
+}
+
+static inline int pipe2(int fds[2], int flags) {
+    return (int)_SC2(SYS_PIPE2, fds, flags);
+}
+
+static inline int pipe(int fds[2]) {
+    return pipe2(fds, 0);
 }
 
 static inline int ftruncate(int fd, int64_t length) {

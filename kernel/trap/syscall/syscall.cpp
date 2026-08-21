@@ -10,6 +10,7 @@
 #include "../../fs/vfs.h"
 #include "../../proc/sync/futex.h"
 #include "../../proc/thread/thread.h"
+#include "../../fs/pipe/pipe.h"
 
 static constexpr int LINUX_EFAULT = 14;
 static constexpr int LINUX_ENOENT = 2;
@@ -78,6 +79,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_MEMBARRIER: tf->a0 = 0; break;
     case SYS_STATX: tf->a0 = sys_statx(tf); break;
     case SYS_IOCTL: tf->a0 = sys_ioctl(tf); break;
+    case SYS_PIPE2: tf->a0 = sys_pipe2(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -1437,6 +1439,43 @@ uint64_t SyscallHandler::sys_statx(TrapFrame* tf) {
     sx->stx_size = (uint64_t)ist.st_size;
     sx->stx_blksize = ist.st_blksize;
     sx->stx_blocks = (uint64_t)ist.st_blocks;
+    RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+    return 0;
+}
+
+uint64_t SyscallHandler::sys_pipe2(TrapFrame* tf) {
+    auto* fds = (int*)tf->a0;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    if (!proc->checkOperation((uint64_t)fds, sizeof(int) * 2, SegmentDesc::SEG_W))
+        return (uint64_t)-14; // EFAULT
+
+    auto* pipeInode = new PipeInode();
+    if (!pipeInode) return (uint64_t)-12; // ENOMEM
+
+    auto* readFile  = new File(pipeInode, nullptr, File::O_RDONLY);
+    auto* writeFile = new File(pipeInode, nullptr, File::O_WRONLY);
+
+    int rfd = proc->m_fdTable->alloc(readFile);
+    if (rfd < 0) {
+        readFile->close();  delete readFile;
+        writeFile->close(); delete writeFile;
+        return (uint64_t)-24; // EMFILE
+    }
+
+    int wfd = proc->m_fdTable->alloc(writeFile);
+    if (wfd < 0) {
+        proc->m_fdTable->close(rfd);
+        writeFile->close(); delete writeFile;
+        return (uint64_t)-24;
+    }
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    fds[0] = rfd;
+    fds[1] = wfd;
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
     return 0;

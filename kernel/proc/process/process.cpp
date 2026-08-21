@@ -10,6 +10,7 @@
 #include "../../mm/mem.h"
 #include "../../mm/vm/vm.h"
 #include "../elf/elf.h"
+#include "../../io/terminal/tty_inode.h"
 
 KMemCache<Process>* Process::s_cache = nullptr;
 Process* Process::s_init = nullptr;
@@ -47,9 +48,10 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
         m_cwdPath  = kstrdup("/", PATH_MAX);
 
         m_fdTable = new FdTable();
-        m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_RDONLY));
-        m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_WRONLY));
-        m_fdTable->alloc(new File(UartInode::instance(), nullptr, File::O_WRONLY));
+        TTYInode* terminal = new TTYInode();
+        m_fdTable->alloc(new File(terminal, nullptr, File::O_RDONLY));
+        m_fdTable->alloc(new File(terminal, nullptr, File::O_WRONLY));
+        m_fdTable->alloc(new File(terminal, nullptr, File::O_WRONLY));
 
         m_mmap = new Mmap(m_pmt, m_segTable);
         m_signalHandler = new SignalHandler();

@@ -20,6 +20,8 @@ void TrapHandler::init() {
 
     PLIC::setPriority(PLIC::IRQ_VIRTIO_DISK, 1);
     PLIC::enableIrq(PLIC::IRQ_VIRTIO_DISK);
+    PLIC::setPriority(PLIC::IRQ_UART, 1);
+    PLIC::enableIrq(PLIC::IRQ_UART);
     PLIC::setThreshold(0);
 
     RiscV::ms_sie(RiscV::SIE_SEIE);
@@ -50,8 +52,16 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
         }
         case EXTERNAL_INTERRUPT: {
             uint32_t irq = PLIC::claim();
-            if (irq == PLIC::IRQ_VIRTIO_DISK)
-                Disk::interruptHandler();
+            switch (irq) {
+                case PLIC::IRQ_VIRTIO_DISK: {
+                    Disk::interruptHandler();
+                    break;
+                }
+                case PLIC::IRQ_UART: {
+                    Console::interruptHandler();
+                    break;
+                }
+            }
             if (irq)
                 PLIC::complete(irq);
             break;
@@ -72,5 +82,8 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
     PCB* running = PCB::running();
     if (running && running->m_usermode) {
         SignalHandler::signalDispatch(trapFrame);
+    }
+    else {
+        RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
     }
 }

@@ -2,6 +2,9 @@
 #include "../../hw/riscv.h"
 
 Lock Console::m_lock = Lock();
+Semaphore* Console::m_sem = nullptr;
+uint32_t Console::m_head = 0;
+uint32_t Console::m_tail = 0;
 
 void Console::kputc(const char ch){
     while ((readReg(CONSOLE_STATUS) & CONSOLE_TX_STATUS_BIT) == 0){}
@@ -13,8 +16,28 @@ void Console::kputs(const char* s){
 }
 
 char Console::kgetc(){
-    while ((readReg(CONSOLE_STATUS) & CONSOLE_RX_STATUS_BIT) == 0){}
-    return readReg(CONSOLE_RX_DATA);
+    sem()->wait();
+    m_lock.acquire();
+    char c = m_buffer[m_head];
+    m_head = (m_head + 1) % BUFFER_SIZE;
+    m_lock.release();
+    return c;
+}
+
+void Console::interruptHandler() {
+    while ((readReg(CONSOLE_STATUS) & CONSOLE_RX_STATUS_BIT) != 0) {
+        char c = readReg(CONSOLE_RX_DATA);
+        
+        m_lock.acquire();
+        if ((m_tail + 1) % BUFFER_SIZE != m_head) {
+            m_buffer[m_tail] = c;
+            m_tail = (m_tail + 1) % BUFFER_SIZE;
+            m_lock.release();
+            sem()->signal();
+        } else {
+            m_lock.release();
+        }
+    }
 }
 
 char digits[] = "0123456789ABCDEF";

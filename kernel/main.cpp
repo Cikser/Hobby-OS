@@ -18,7 +18,8 @@ void printSleep(void* arg) {
 }
 
 int main() {
-    TrapHandler::init();
+	TrapHandler::init();
+	Console::init();
 	MemoryAllocator::init();
 	Disk::init();
 	VFS::init();

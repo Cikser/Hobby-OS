@@ -25,13 +25,18 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
     m_selfSem(Semaphore(0)),
     m_spaceLock(Lock()),
     m_mmap(nullptr),
-    m_fdTable(nullptr)
+    m_fdTable(nullptr),
+    m_pgid(0),
+    m_sid(0),
+    m_allNext(nullptr)
 {
     m_tgid = m_pid;
     if (parent) {
         m_fdTable = fdTable ? fdTable : parent->m_fdTable->clone();
         m_cwdInode = parent->m_cwdInode;
         m_cwdPath  = kstrdup(parent->m_cwdPath, PATH_MAX);
+        m_pgid = parent->m_pgid;
+        m_sid = parent->m_sid;
     }
     else {
         uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
@@ -46,9 +51,12 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
             USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_TOP);
         m_cwdInode = 2;
         m_cwdPath  = kstrdup("/", PATH_MAX);
+        m_pgid = m_pid;
+        m_sid  = m_pid;
 
         m_fdTable = new FdTable();
         TTYInode* terminal = new TTYInode();
+        terminal->setForegroundPgid(m_pgid);
         m_fdTable->alloc(new File(terminal, nullptr, File::O_RDONLY));
         m_fdTable->alloc(new File(terminal, nullptr, File::O_WRONLY));
         m_fdTable->alloc(new File(terminal, nullptr, File::O_WRONLY));
@@ -57,9 +65,13 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
         m_signalHandler = new SignalHandler();
         m_sigMask = 0;
     }
+
+    registerProcess(this);
 }
 
 void Process::clear() {
+    unregisterProcess(this);
+
     Thread* t = m_threads;
     while (t) {
         Thread* next = t->m_nextThread;
@@ -178,13 +190,7 @@ uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo
 }
 
 Process* Process::findProcess(pid_t pid) {
-    Process* current = PCB::runningProcess();
-    if (!current) return nullptr;
-    if (current->pid() == pid) return current;
-    for (auto it = current->m_firstChild; it; it = it->m_nextSibling) {
-        if (it->pid() == pid) return it;
-    }
-    return nullptr;
+    return findByPid(pid);
 }
 
 Process* Process::createInit() {
@@ -737,4 +743,78 @@ int Process::sigprocmask(int how, const uint64_t* set, uint64_t* oldset) {
     newMask &= ~(sigBit(SIGKILL) | sigBit(SIGSTOP));
     m_sigMask = newMask;
     return 0;
+}
+
+void Process::registerProcess(Process* p) {
+    s_allLock.acquire();
+    p->m_allNext = s_allHead;
+    s_allHead = p;
+    s_allLock.release();
+}
+
+void Process::unregisterProcess(Process* p) {
+    s_allLock.acquire();
+    Process* cur = s_allHead, *prev = nullptr;
+    while (cur) {
+        if (cur == p) {
+            if (prev) prev->m_allNext = cur->m_allNext;
+            else s_allHead = cur->m_allNext;
+            break;
+        }
+        prev = cur;
+        cur = cur->m_allNext;
+    }
+    s_allLock.release();
+}
+
+Process* Process::findByPid(pid_t pid) {
+    s_allLock.acquire();
+    Process* p = s_allHead;
+    while (p) {
+        if (p->m_pid == pid) {
+            s_allLock.release();
+            return p;
+        }
+        p = p->m_allNext;
+    }
+    s_allLock.release();
+    return nullptr;
+}
+
+void Process::signalProcessGroup(pid_t pgid, int signum) {
+    if (pgid <= 0) return;
+    s_allLock.acquire();
+    for (Process* p = s_allHead; p; p = p->m_allNext) {
+        if (p->m_pgid == pgid) {
+            p->kill(signum);
+        }
+    }
+    s_allLock.release();
+}
+
+int Process::setpgid(pid_t targetPid, pid_t pgid) {
+    Process* target = (targetPid == 0) ? this : findByPid(targetPid);
+    if (!target) return -1;
+
+    pid_t newPgid = (pgid == 0) ? target->m_pid : pgid;
+    if ((int64_t)newPgid < 0) return -1;
+
+    if (target->m_sid != m_sid) return -1;
+
+    target->m_pgid = newPgid;
+    return 0;
+}
+
+pid_t Process::getpgid(pid_t targetPid) const {
+    if (targetPid == 0) return m_pgid;
+    Process* target = findByPid(targetPid);
+    if (!target) return (pid_t)-1;
+    return target->m_pgid;
+}
+
+pid_t Process::setsid() {
+    if (m_pgid == m_pid) return (pid_t)-1;
+    m_sid = m_pid;
+    m_pgid = m_pid;
+    return m_pid;
 }

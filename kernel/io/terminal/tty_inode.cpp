@@ -1,6 +1,8 @@
 #include "tty_inode.h"
 #include "../console/console.h"
 #include "../../mm/mem.h"
+#include "../../proc/process/process.h"
+#include "../../proc/signal/signal.h"
 
 TTYInode::TTYInode() {
     memset(&m_termios, 0, sizeof(m_termios));
@@ -51,10 +53,30 @@ int TTYInode::read(uint64_t offset, void* buf, uint64_t len) {
 
     if (m_canonical) {
         while (m_lineLen == 0) {
+            bool eof = false;
             while (true) {
                 char c = getc();
 
-                if (c == '\b' || c == 127) {
+                if ((m_termios.c_lflag & ISIG) && m_fgPgid > 0) {
+                    int sig = 0;
+                    if (c == (char)m_termios.c_cc[VINTR]) sig = SIGINT;
+                    else if (c == (char)m_termios.c_cc[VQUIT]) sig = SIGQUIT;
+                    else if (c == (char)m_termios.c_cc[VSUSP]) sig = SIGTSTP;
+
+                    if (sig) {
+                        if (m_echo) { putc('\r'); putc('\n'); }
+                        m_lineLen = 0;
+                        Process::signalProcessGroup(m_fgPgid, sig);
+                        continue;
+                    }
+                }
+
+                if ((m_termios.c_lflag & ICANON) && c == (char)m_termios.c_cc[VEOF]) {
+                    eof = true;
+                    break;
+                }
+
+                if (c == (char)m_termios.c_cc[VERASE] || c == '\b' || c == 127) {
                     if (m_lineLen > 0) {
                         m_lineLen--;
                         if (m_echo) {
@@ -83,6 +105,10 @@ int TTYInode::read(uint64_t offset, void* buf, uint64_t len) {
                         putc(c);
                     }
                 }
+            }
+            if (eof) {
+                if (m_lineLen == 0) return 0;
+                break;
             }
         }
 
@@ -153,6 +179,14 @@ int TTYInode::ioctl(uint64_t req, void* argp) {
 
     case TIOCGWINSZ:
         *(kwinsize*)argp = m_winsize;
+        return 0;
+
+    case TIOCGPGRP:
+        *(int*)argp = (int)m_fgPgid;
+        return 0;
+
+    case TIOCSPGRP:
+        m_fgPgid = (pid_t)*(int*)argp;
         return 0;
 
     default:

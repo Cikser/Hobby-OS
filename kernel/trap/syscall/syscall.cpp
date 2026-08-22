@@ -81,6 +81,9 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_STATX: tf->a0 = sys_statx(tf); break;
     case SYS_IOCTL: tf->a0 = sys_ioctl(tf); break;
     case SYS_PIPE2: tf->a0 = sys_pipe2(tf); break;
+    case SYS_SETPGID: tf->a0 = sys_setpgid(tf); break;
+    case SYS_GETPGID: tf->a0 = sys_getpgid(tf); break;
+    case SYS_SETSID: tf->a0 = sys_setsid(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -1086,7 +1089,17 @@ uint64_t SyscallHandler::sys_kill(TrapFrame* tf) {
     Process* proc = PCB::runningProcess();
     if (!proc) return (uint64_t)-1;
 
-    if (pid == 0 || pid == (pid_t)proc->pid()) {
+    if ((int64_t)pid < -1) {
+        Process::signalProcessGroup((pid_t)(-(int64_t)pid), signum);
+        return 0;
+    }
+
+    if ((int64_t)pid == 0) {
+        Process::signalProcessGroup(proc->pgid(), signum);
+        return 0;
+    }
+
+    if (pid == (pid_t)proc->pid()) {
         return (uint64_t)proc->kill(signum);
     }
 
@@ -1387,6 +1400,33 @@ uint64_t SyscallHandler::sys_ioctl(TrapFrame* tf) {
             return 0;
         }
 
+        case TIOCGPGRP: {
+            if (!PCB::runningProcess()->checkOperation(argAddr, sizeof(int), SegmentDesc::SEG_W))
+                return (uint64_t)-14;
+
+            int pgrp;
+            int r = file->ioctl(req, &pgrp);
+            if (r < 0) return (uint64_t)-25;
+
+            RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+            memcpy((void*)argAddr, &pgrp, sizeof(pgrp));
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return 0;
+        }
+
+        case TIOCSPGRP: {
+            if (!PCB::runningProcess()->checkOperation(argAddr, sizeof(int), SegmentDesc::SEG_R))
+                return (uint64_t)-14;
+
+            int pgrp;
+            RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+            memcpy(&pgrp, (void*)argAddr, sizeof(pgrp));
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+            int r = file->ioctl(req, &pgrp);
+            return r < 0 ? (uint64_t)-25 : 0;
+        }
+
         case FIONREAD:
             return (uint64_t)-25;
 
@@ -1521,4 +1561,30 @@ uint64_t SyscallHandler::sys_pipe2(TrapFrame* tf) {
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
     return 0;
+}
+
+uint64_t SyscallHandler::sys_setpgid(TrapFrame* tf) {
+    auto pid = (pid_t)(int64_t)tf->a0;
+    auto pgid = (pid_t)(int64_t)tf->a1;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    return (uint64_t)(int64_t)proc->setpgid(pid, pgid);
+}
+
+uint64_t SyscallHandler::sys_getpgid(TrapFrame* tf) {
+    auto pid = (pid_t)(int64_t)tf->a0;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    return (uint64_t)(int64_t)proc->getpgid(pid);
+}
+
+uint64_t SyscallHandler::sys_setsid(TrapFrame* tf) {
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-1;
+
+    return (uint64_t)(int64_t)proc->setsid();
 }

@@ -20,6 +20,9 @@ public:
     int truncate(uint64_t size) override { return 0; }
     int ioctl(uint64_t req, void* argp) override;
 
+    void setForegroundPgid(pid_t pgid) { m_fgPgid = pgid; }
+    pid_t foregroundPgid() const { return m_fgPgid; }
+
     void* operator new(size_t size) {
         if (!s_cache) {
             s_cache = new KMemCache<TTYInode>();
@@ -47,6 +50,7 @@ private:
 
     ktermios m_termios;
     kwinsize m_winsize;
+    pid_t m_fgPgid = 0;
 };
 
 #endif

@@ -62,6 +62,15 @@ public:
         return m_mmap->checkOperation(addr, addr + len, op);
     }
 
+    pid_t pgid() const { return m_pgid; }
+    pid_t sid() const { return m_sid; }
+    int setpgid(pid_t targetPid, pid_t pgid);
+    pid_t getpgid(pid_t targetPid) const;
+    pid_t setsid();
+
+    static Process* findByPid(pid_t pid);
+    static void signalProcessGroup(pid_t pgid, int signum);
+
 private:
     friend class Thread;
     friend class PCBGarbage;
@@ -94,6 +103,16 @@ private:
     Mmap* m_mmap;
     bool m_reaped = false;
     FdTable* m_fdTable;
+
+    pid_t m_pgid;
+    pid_t m_sid;
+    Process* m_allNext;
+
+    static Process* s_allHead;
+    static Lock s_allLock;
+
+    static void registerProcess(Process* p);
+    static void unregisterProcess(Process* p);
 };
 
 static constexpr uint64_t CSIGNAL = 0xFF;

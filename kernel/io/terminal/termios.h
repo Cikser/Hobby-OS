@@ -7,8 +7,11 @@ static constexpr uint64_t TCGETS = 0x5401;
 static constexpr uint64_t TCSETS = 0x5402;
 static constexpr uint64_t TCSETSW = 0x5403;
 static constexpr uint64_t TCSETSF = 0x5404;
+static constexpr uint64_t TIOCGPGRP = 0x540F;
+static constexpr uint64_t TIOCSPGRP = 0x5410;
 static constexpr uint64_t TIOCGWINSZ = 0x5413;
 static constexpr uint64_t FIONREAD = 0x541B;
+
 
 static constexpr uint32_t NCCS = 32;
 

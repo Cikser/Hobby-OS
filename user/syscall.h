@@ -819,6 +819,40 @@ static inline int membarrier(int cmd, int flags, int cpu_id) {
     return (int)_SC3(SYS_MEMBARRIER, cmd, flags, cpu_id);
 }
 
+#define SYS_SETPGID 154
+#define SYS_GETPGID 155
+#define SYS_SETSID  157
+
+#define TIOCGPGRP 0x540F
+#define TIOCSPGRP 0x5410
+
+static inline int setpgid(pid_t pid, pid_t pgid) {
+    return (int)_SC2(SYS_SETPGID, pid, pgid);
+}
+
+static inline pid_t getpgid(pid_t pid) {
+    return (pid_t)_SC1(SYS_GETPGID, pid);
+}
+
+static inline pid_t getpgrp(void) {
+    return getpgid(0);
+}
+
+static inline pid_t setsid(void) {
+    return (pid_t)_SC0(SYS_SETSID);
+}
+
+static inline pid_t tcgetpgrp(int fd) {
+    int pgrp = -1;
+    ioctl(fd, TIOCGPGRP, (unsigned long)&pgrp);
+    return (pid_t)pgrp;
+}
+
+static inline int tcsetpgrp(int fd, pid_t pgrp) {
+    int p = (int)pgrp;
+    return ioctl(fd, TIOCSPGRP, (unsigned long)&p);
+}
+
 static inline int ioctl(int fd, unsigned long req, unsigned long arg) {
     return (int)_SC3(SYS_IOCTL, fd, req, arg);
 }

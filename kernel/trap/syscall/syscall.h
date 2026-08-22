@@ -44,6 +44,9 @@ enum Syscall {
     SYS_RT_SIGPROCMASK = 135,
     SYS_RT_SIGRETURN = 139,
     SYS_RT_SIGPENDING = 136,
+    SYS_SETPGID = 154,
+    SYS_GETPGID = 155,
+    SYS_SETSID = 157,
     SYS_UNAME = 160,
     SYS_GETRUSAGE = 165,
     SYS_UMASK = 166,
@@ -138,6 +141,9 @@ private:
     static uint64_t sys_statx(TrapFrame* tf);
     static uint64_t sys_ioctl(TrapFrame* tf);
     static uint64_t sys_pipe2(TrapFrame* tf);
+    static uint64_t sys_setpgid(TrapFrame* tf);
+    static uint64_t sys_getpgid(TrapFrame* tf);
+    static uint64_t sys_setsid(TrapFrame* tf);
 };
 
 #endif

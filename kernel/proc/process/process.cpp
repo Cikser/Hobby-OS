@@ -446,7 +446,7 @@ void Process::exit(int exitCode) {
     yield();
 }
 
-pid_t Process::wait(pid_t pid, int* status) {
+pid_t Process::wait(pid_t pid, int* status, int options) {
     m_lock.acquire();
     if (!m_firstChild) {
         m_lock.release();
@@ -464,6 +464,20 @@ pid_t Process::wait(pid_t pid, int* status) {
         }
     }
     m_lock.release();
+
+    if (options & WNOHANG) {
+        m_lock.acquire();
+        bool hasZombie = false;
+        for (Process* c = m_firstChild; c; c = c->m_nextSibling) {
+            if (c->m_state == ProcState::ZOMBIE &&
+                (pid == -1 || c->m_pid == pid)) {
+                hasZombie = true;
+                break;
+            }
+        }
+        m_lock.release();
+        if (!hasZombie) return 0;
+    }
 
     m_selfSem.wait();
 
@@ -705,6 +719,10 @@ int Process::kill(int signum) {
 
     m_signalHandler->send(signum);
 
+    if (signum == SIGCONT) {
+        wakeStoppedThreads();
+    }
+
     m_lock.acquire();
     if (m_state == ProcState::SLEEPING || m_state == ProcState::BLOCKED) {
         setState(ProcState::READY);
@@ -819,4 +837,25 @@ pid_t Process::setsid() {
     m_sid = m_pid;
     m_pgid = m_pid;
     return m_pid;
+}
+
+void Process::notifyStopped(int signum) {
+    if (m_parent) m_parent->kill(SIGCHLD);
+}
+
+void Process::wakeStoppedThreads() {
+    m_lock.acquire();
+    if (m_state == ProcState::STOPPED) {
+        setState(ProcState::READY);
+        Scheduler::put(this);
+    }
+    Thread* t = m_threads;
+    while (t) {
+        if (t->state() == ProcState::STOPPED) {
+            t->setState(ProcState::READY);
+            Scheduler::put(t);
+        }
+        t = t->m_nextThread;
+    }
+    m_lock.release();
 }

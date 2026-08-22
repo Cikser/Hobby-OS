@@ -115,7 +115,8 @@ static bool executeDefault(int signum, TrapFrame* tf) {
             return false;
 
         case SigDefaultAction::STOP:
-            PCB::running()->setState(ProcState::BLOCKED);
+            PCB::running()->setState(ProcState::STOPPED);
+            if (proc) proc->notifyStopped(signum);
             PCB::yield();
             return true;
 

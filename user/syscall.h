@@ -304,6 +304,14 @@ static inline pid_t waitpid(pid_t pid, int* status) {
     return wait4(pid, status, 0);
 }
 
+#define WNOHANG   1
+#define WUNTRACED 2
+#define WCONTINUED 8
+
+static inline pid_t waitpid3(pid_t pid, int* status, int options) {
+    return wait4(pid, status, options);
+}
+
 static inline int execve(const char* path, char* const argv[], char* const envp[]) {
     return (int)_SC3(SYS_EXECVE, path, argv, envp);
 }

@@ -347,6 +347,7 @@ uint64_t SyscallHandler::sys_execve(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
     pid_t pid = tf->a0;
     uint64_t statusAddr = tf->a1;
+    int options = (int)(int64_t)tf->a2;
 
     if (statusAddr && !PCB::runningProcess()->checkOperation(statusAddr, sizeof(int), SegmentDesc::SEG_W))
         return -1;
@@ -354,9 +355,9 @@ uint64_t SyscallHandler::sys_wait4(TrapFrame* tf) {
     auto proc = PCB::runningProcess();
 
     int status = 0;
-    pid_t ret = proc->wait(pid, statusAddr ? &status : nullptr);
+    pid_t ret = proc->wait(pid, statusAddr ? &status : nullptr, options);
 
-    if (statusAddr) {
+    if (ret > 0 && statusAddr) {
         RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         *(int*)statusAddr = status;
         RiscV::mc_sstatus(RiscV::SSTATUS_SUM);

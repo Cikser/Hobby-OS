@@ -43,7 +43,12 @@ public:
     int closeFile(int fd) const;
     SegmentTable* segmentTable() const { return m_segTable; };
     void exit(int exitCode) override;
-    pid_t wait(pid_t pid, int* status);
+
+    static constexpr int WNOHANG = 1;
+    static constexpr int WUNTRACED = 2;
+    static constexpr int WCONTINUED = 8;
+
+    pid_t wait(pid_t pid, int* status, int options = 0);
     uint64_t mmap(uint64_t addr, uint64_t length, uint32_t prot, uint32_t flags,
         int fd, uint64_t offset) const;
     int mprotect(uint64_t addr, uint64_t length, uint32_t prot) const;
@@ -70,6 +75,8 @@ public:
 
     static Process* findByPid(pid_t pid);
     static void signalProcessGroup(pid_t pgid, int signum);
+    void notifyStopped(int signum);
+    void wakeStoppedThreads();
 
 private:
     friend class Thread;

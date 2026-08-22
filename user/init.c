@@ -3501,12 +3501,59 @@ static void test_pipe(void) {
     }
 }
 
+static void test_wait_wnohang(void) {
+    section("91. waitpid WNOHANG");
+
+    pid_t child = fork();
+    if (child == 0) {
+        for (volatile long i = 0; i < 5000000L; i++);
+        exit(0);
+    }
+
+    int status = 0;
+    pid_t r = waitpid3(child, &status, WNOHANG);
+    check(r == 0, "WNOHANG returns 0 immediately while child alive");
+
+    r = waitpid3(child, &status, 0);
+    check(r == child, "blocking waitpid reaps child eventually");
+    check(status == 0, "child exit status correct");
+
+    r = waitpid3(child, &status, WNOHANG);
+    check(r < 0, "WNOHANG on already-reaped child returns error");
+}
+
+static volatile int g_cont_seen = 0;
+static void handler_sigcont(int sig) { g_cont_seen = 1; (void)sig; }
+
+static void test_sigstop_sigcont(void) {
+    section("92. SIGSTOP + SIGCONT");
+
+    pid_t child = fork();
+    if (child == 0) {
+        signal(SIGCONT, handler_sigcont);
+        while (!g_cont_seen) sched_yield();
+        exit(55);
+    }
+
+    for (volatile long i = 0; i < 2000000L; i++);
+
+    kill(child, SIGSTOP);
+    for (volatile long i = 0; i < 2000000L; i++);
+
+    kill(child, SIGCONT);
+
+    int status = 0;
+    pid_t w = waitpid(child, &status);
+    check(w == child, "child eventually reaped after STOP+CONT");
+    check(status == 55, "child resumed and exited with correct code after SIGCONT");
+}
+
 /* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
 
 void _start() {
-
+/*
     const char* argv[] = { "/bin/hello_musl", "arg 1", "arg 2", 0 };
     const char* envp[] = { 0 };
     printf("entering hello_musl\n");
@@ -3514,7 +3561,7 @@ void _start() {
 
     write(1, "execve failed\n", 14);
     exit(1);
-
+*/
     printf("\n*** KERNEL STRESS TEST SUITE ***\n");
     printf("    pid=%d\n", getpid());
 
@@ -3613,6 +3660,8 @@ void _start() {
     test_membarrier();
     test_ioctl();
     test_pipe();
+    test_wait_wnohang();
+    test_sigstop_sigcont();
 
     print_summary();
     exit(0);

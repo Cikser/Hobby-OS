@@ -12,6 +12,7 @@ enum class ProcState {
     RUNNING,
     BLOCKED,
     SLEEPING,
+    STOPPED,
     ZOMBIE
 };
 

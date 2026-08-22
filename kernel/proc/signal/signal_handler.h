@@ -55,6 +55,13 @@ private:
     SignalAction m_actions[NSIG];
 
     static KMemCache<SignalHandler>* s_cache;
+
+    bool hasPendingRaw(uint64_t bits) const {
+        m_lock.acquire();
+        bool has = (m_pending & bits) != 0;
+        m_lock.release();
+        return has;
+    }
 };
 
 #endif

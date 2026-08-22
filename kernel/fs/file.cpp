@@ -91,3 +91,8 @@ int File::fstat(InodeStat* st) const {
     if (!m_inode) return -1;
     return m_inode->stat(st);
 }
+
+int File::ioctl(uint64_t req, void* argp) {
+    if (!m_inode) return -1;
+    return m_inode->ioctl(req, argp);
+}

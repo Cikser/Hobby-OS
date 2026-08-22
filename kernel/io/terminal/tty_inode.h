@@ -3,10 +3,11 @@
 
 #include "../../fs/vfs_inode.h"
 #include "../../mm/kalloc/kmem_cache.h"
+#include "termios.h"
 
 class TTYInode : public VfsInode {
 public:
-    TTYInode() = default;
+    TTYInode();
     ~TTYInode() override = default;
 
     int read(uint64_t offset, void* buf, uint64_t len) override;
@@ -17,6 +18,7 @@ public:
     int stat(InodeStat* out) override;
     uint32_t inodeNum() const override { return 0; }
     int truncate(uint64_t size) override { return 0; }
+    int ioctl(uint64_t req, void* argp) override;
 
     void* operator new(size_t size) {
         if (!s_cache) {
@@ -43,6 +45,8 @@ private:
     bool m_echo = true;
     bool m_canonical = true;
 
+    ktermios m_termios;
+    kwinsize m_winsize;
 };
 
 #endif

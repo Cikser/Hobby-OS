@@ -1,5 +1,33 @@
 #include "tty_inode.h"
 #include "../console/console.h"
+#include "../../mm/mem.h"
+
+TTYInode::TTYInode() {
+    memset(&m_termios, 0, sizeof(m_termios));
+    m_termios.c_iflag = ICRNL;
+    m_termios.c_oflag = OPOST | ONLCR;
+    m_termios.c_cflag = 0;
+    m_termios.c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK;
+
+    m_termios.c_cc[VINTR] = 3;
+    m_termios.c_cc[VQUIT] = 28;
+    m_termios.c_cc[VERASE] = 127;
+    m_termios.c_cc[VKILL] = 21;
+    m_termios.c_cc[VEOF] = 4;
+    m_termios.c_cc[VSUSP] = 26;
+    m_termios.c_cc[VSTART] = 17;
+    m_termios.c_cc[VSTOP] = 19;
+    m_termios.c_cc[VMIN] = 1;
+    m_termios.c_cc[VTIME] = 0;
+
+    m_termios.c_ispeed = 38400;
+    m_termios.c_ospeed = 38400;
+
+    m_winsize.ws_row = 24;
+    m_winsize.ws_col = 80;
+    m_winsize.ws_xpixel = 0;
+    m_winsize.ws_ypixel = 0;
+}
 
 void TTYInode::putc(char c) {
     Console::kputc(c);
@@ -99,10 +127,35 @@ int TTYInode::stat(InodeStat* out) {
     out->st_gid = 0;
     
     out->st_rdev = (4 << 8) | 0; 
-    
+
     out->st_size = 0;
     out->st_blksize = 4096;
     out->st_blocks = 0;
 
     return 0;
+}
+
+int TTYInode::ioctl(uint64_t req, void* argp) {
+    if (!argp) return -1;
+
+    switch (req) {
+    case TCGETS:
+        *(ktermios*)argp = m_termios;
+        return 0;
+
+    case TCSETS:
+    case TCSETSW:
+    case TCSETSF:
+        m_termios = *(ktermios*)argp;
+        m_canonical = (m_termios.c_lflag & ICANON) != 0;
+        m_echo = (m_termios.c_lflag & ECHO) != 0;
+        return 0;
+
+    case TIOCGWINSZ:
+        *(kwinsize*)argp = m_winsize;
+        return 0;
+
+    default:
+        return -1;
+    }
 }

@@ -1050,4 +1050,15 @@ static inline long atol(const char* s) {
 
 static inline int atoi(const char* s) { return (int)atol(s); }
 
+struct winsize {
+    unsigned short ws_row;
+    unsigned short ws_col;
+    unsigned short ws_xpixel;
+    unsigned short ws_ypixel;
+};
+
+static inline int ioctl_winsz(int fd, struct winsize* ws) {
+    return ioctl(fd, TIOCGWINSZ, (unsigned long)ws);
+}
+
 #endif

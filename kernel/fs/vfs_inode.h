@@ -47,6 +47,7 @@ public:
     virtual int truncate(uint64_t size) = 0;
     virtual void onOpen(uint32_t flags) {}
     virtual void onClose(uint32_t flags) {}
+    virtual int ioctl(uint64_t req, void* argp) { return -1; }
 };
 
 class VfsMount {

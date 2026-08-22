@@ -11,6 +11,7 @@
 #include "../../proc/sync/futex.h"
 #include "../../proc/thread/thread.h"
 #include "../../fs/pipe/pipe.h"
+#include "../../io/terminal/termios.h"
 
 static constexpr int LINUX_EFAULT = 14;
 static constexpr int LINUX_ENOENT = 2;
@@ -1337,17 +1338,58 @@ uint64_t SyscallHandler::sys_getrandom(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_ioctl(TrapFrame* tf) {
     int fd  = (int)(int64_t)tf->a0;
     uint64_t req = tf->a1;
+    uint64_t argAddr = tf->a2;
 
-    static constexpr uint64_t TCGETS = 0x5401;
-    static constexpr uint64_t TIOCGWINSZ = 0x5413;
-    static constexpr uint64_t FIONREAD = 0x541B;
+    File* file = PCB::runningProcess()->getFile(fd);
+    if (!file) return (uint64_t)-9; // EBADF
 
     switch (req) {
-        case TCGETS:
-        case TIOCGWINSZ:
-            return (uint64_t)-25;
+        case TCGETS: {
+            if (!PCB::runningProcess()->checkOperation(argAddr, sizeof(ktermios), SegmentDesc::SEG_W))
+                return (uint64_t)-14; // EFAULT
+
+            ktermios kt;
+            int r = file->ioctl(req, &kt);
+            if (r < 0) return (uint64_t)-25; // ENOTTY
+
+            RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+            memcpy((void*)argAddr, &kt, sizeof(kt));
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return 0;
+        }
+
+        case TCSETS:
+        case TCSETSW:
+        case TCSETSF: {
+            if (!PCB::runningProcess()->checkOperation(argAddr, sizeof(ktermios), SegmentDesc::SEG_R))
+                return (uint64_t)-14;
+
+            ktermios kt;
+            RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+            memcpy(&kt, (void*)argAddr, sizeof(kt));
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+
+            int r = file->ioctl(req, &kt);
+            return r < 0 ? (uint64_t)-25 : 0;
+        }
+
+        case TIOCGWINSZ: {
+            if (!PCB::runningProcess()->checkOperation(argAddr, sizeof(kwinsize), SegmentDesc::SEG_W))
+                return (uint64_t)-14;
+
+            kwinsize ws;
+            int r = file->ioctl(req, &ws);
+            if (r < 0) return (uint64_t)-25;
+
+            RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+            memcpy((void*)argAddr, &ws, sizeof(ws));
+            RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
+            return 0;
+        }
+
         case FIONREAD:
             return (uint64_t)-25;
+
         default:
             return (uint64_t)-25;
     }

@@ -25,6 +25,7 @@ public:
     uint32_t flags() const { return m_flags; }
     void close();
     int fstat(InodeStat* st) const;
+    int ioctl(uint64_t req, void* argp);
 
     static constexpr uint32_t O_RDONLY = 0x0;
     static constexpr uint32_t O_WRONLY = 0x1;

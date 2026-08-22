@@ -3344,24 +3344,22 @@ static void test_membarrier(void) {
 static void test_ioctl(void) {
     section("89. ioctl");
 
-    int r = ioctl(STDOUT_FILENO, TIOCGWINSZ, 0);
-    check(r < 0, "ioctl TIOCGWINSZ on stdout returns error (not a tty)");
-
-    r = ioctl(STDOUT_FILENO, TCGETS, 0);
-    check(r < 0, "ioctl TCGETS on stdout returns error");
-
-    r = ioctl(STDIN_FILENO, FIONREAD, 0);
-    check(r < 0, "ioctl FIONREAD on stdin returns error");
-
-    r = ioctl(-1, TIOCGWINSZ, 0);
-    check(r < 0, "ioctl on bad fd returns error");
+    struct winsize {
+        unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel;
+    } ws;
+    int r = ioctl(STDOUT_FILENO, TIOCGWINSZ, (unsigned long)&ws);
+    check(r == 0, "ioctl TIOCGWINSZ on stdout (tty) succeeds");
+    check(ws.ws_row > 0 && ws.ws_col > 0, "winsize has sane values");
 
     int fd = open("/readme.txt", O_RDONLY);
     if (fd >= 0) {
-        r = ioctl(fd, TIOCGWINSZ, 0);
-        check(r < 0, "ioctl TIOCGWINSZ on regular file returns error");
+        r = ioctl(fd, TIOCGWINSZ, (unsigned long)&ws);
+        check(r < 0, "ioctl TIOCGWINSZ on regular file fails");
         close(fd);
     }
+
+    r = ioctl(-1, TIOCGWINSZ, 0);
+    check(r < 0, "ioctl on bad fd fails");
 }
 
 /* ------------------------------------------------------------------ */

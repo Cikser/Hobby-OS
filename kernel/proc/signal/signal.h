@@ -100,4 +100,12 @@ inline uint64_t sigBit(int signum) {
     return (signum >= 1 && signum < NSIG) ? (1ULL << (signum - 1)) : 0;
 }
 
+__attribute__((aligned(4096))) const uint32_t signal_trampoline[1024] = {
+    0x08b00893, // li a7, 139
+    0x00000073, // ecall
+    0,          // pad
+};
+
+constexpr uint64_t USER_TRAMPOLINE_ADDR = 0x0000001000000000ULL;
+
 #endif

@@ -43,6 +43,11 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
         m_umask = parent->m_umask;
     }
     else {
+        m_pmt->mapPage(
+            USER_TRAMPOLINE_ADDR,
+            MemoryLayout::v2p((uint64_t)signal_trampoline),
+            PMT::PAGE_X | PMT::PAGE_R | PMT::PAGE_U | PMT::PAGE_V
+        );
         uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
         m_pmt->mapPages(
             USER_STACK_TOP - USER_STACK_SIZE,

@@ -200,13 +200,17 @@ void SignalHandler::signalDispatch(TrapFrame* tf) {
         return;
     }
 
-    Console::kprintf("signalDispatch: pid=%ld sig=%d handler=0x%lx restorer=0x%lx old_sepc=0x%lx\n",
-        (long)PCB::currentPid(), signum, action.sa_handler, action.sa_restorer, tf->sepc);
+    uint64_t restorerAddr = 0;
+    if ((action.sa_flags & SA_RESTORER) && action.sa_restorer != 0) {
+        restorerAddr = action.sa_restorer;
+    } else {
+        restorerAddr = USER_TRAMPOLINE_ADDR;
+    }
 
     PCB::running()->m_sigMask = threadMask | (action.sa_mask & ~(sigBit(SIGKILL) | sigBit(SIGSTOP)));
 
     tf->sp   = newSp;
     tf->a0   = (uint64_t)signum;
-    tf->ra   = action.sa_restorer;
+    tf->ra   = restorerAddr;
     tf->sepc = action.sa_handler;
 }

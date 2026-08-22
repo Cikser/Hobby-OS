@@ -39,6 +39,7 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
         m_cwdPath  = kstrdup(parent->m_cwdPath, PATH_MAX);
         m_pgid = parent->m_pgid;
         m_sid = parent->m_sid;
+        m_umask = parent->m_umask;
     }
     else {
         uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);
@@ -858,4 +859,10 @@ void Process::wakeStoppedThreads() {
         t = t->m_nextThread;
     }
     m_lock.release();
+}
+
+uint32_t Process::setUmask(uint32_t mask) {
+    uint32_t old = m_umask;
+    m_umask = mask & 0777;
+    return old;
 }

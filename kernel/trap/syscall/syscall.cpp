@@ -1072,13 +1072,11 @@ uint64_t SyscallHandler::sys_getrusage(TrapFrame* tf) {
     return 0;
 }
 
-static uint32_t g_umask = 022;
-
 uint64_t SyscallHandler::sys_umask(TrapFrame* tf) {
     uint32_t newmask = (uint32_t)tf->a0;
-    uint32_t old = g_umask;
-    g_umask = newmask & 0777;
-    return (uint64_t)old;
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)022;
+    return (uint64_t)proc->setUmask(newmask);
 }
 
 uint64_t SyscallHandler::sys_kill(TrapFrame* tf) {

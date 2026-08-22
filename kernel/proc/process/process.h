@@ -72,6 +72,8 @@ public:
     int setpgid(pid_t targetPid, pid_t pgid);
     pid_t getpgid(pid_t targetPid) const;
     pid_t setsid();
+    uint32_t umask() const { return m_umask; }
+    uint32_t setUmask(uint32_t mask);
 
     static Process* findByPid(pid_t pid);
     static void signalProcessGroup(pid_t pgid, int signum);
@@ -113,6 +115,7 @@ private:
 
     pid_t m_pgid;
     pid_t m_sid;
+    uint32_t m_umask;
     Process* m_allNext;
 
     static Process* s_allHead;

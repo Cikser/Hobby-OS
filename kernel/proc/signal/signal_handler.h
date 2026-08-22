@@ -41,6 +41,16 @@ public:
         return m;
     }
 
+    void resetForExec() {
+        m_lock.acquire();
+        for (int i = 0; i < NSIG; i++) {
+            if (m_actions[i].sa_handler != SIG_IGN) {
+                m_actions[i] = { SIG_DFL, 0, 0, 0 };
+            }
+        }
+        m_lock.release();
+    }
+
     void* operator new(size_t size) {
         if (!s_cache) s_cache = new KMemCache<SignalHandler>();
         return s_cache->alloc();

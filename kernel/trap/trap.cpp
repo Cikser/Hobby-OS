@@ -76,14 +76,13 @@ void TrapHandler::handleTrap(TrapFrame* trapFrame) {
             Console::kprintf("scause: 0x%lx\n", scause);
             Console::kprintf("sepc: 0x%lx\n", sepc);
             Console::kprintf("stval: 0x%lx\n", stval);
+            Console::kprintf("pid: %d\n", PCB::running()->pid());
+            Console::kprintf("mode: %s\n", PCB::running()->m_usermode ? "user" : "kernel");
             Console::panic("kernel trap");
         }
     }
     PCB* running = PCB::running();
     if (running && running->m_usermode) {
         SignalHandler::signalDispatch(trapFrame);
-    }
-    else {
-        RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
     }
 }

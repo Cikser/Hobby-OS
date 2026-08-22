@@ -25,6 +25,7 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_signalHandler(nullptr),
     m_lock(Lock())
 {
+    m_kstack = nullptr;
     s_pidLock.acquire();
     m_pid = s_pid++;
     s_pidLock.release();
@@ -41,6 +42,13 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
         s_running = this;
         memset(&m_context, 0, sizeof(m_context));
         m_state = ProcState::RUNNING;
+    }
+}
+
+PCB::~PCB() {
+    if (m_kstack) {
+        MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
+        m_kstack = nullptr;
     }
 }
 
@@ -86,7 +94,7 @@ void PCB::pcbEntry() {
 }
 
 void PCB::dispatch() {
-    if (Scheduler::empty()) return;
+    if (Scheduler::empty() && s_running->m_state == ProcState::RUNNING) return;
     RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
     s_timeSliceCounter = 0;
     PCB* current = s_running;
@@ -114,11 +122,6 @@ void PCB::dispatch() {
     switchContext(&current->m_context, &next->m_context);
 }
 
-void PCB::clear() {
-    if (m_kstack)
-        MemoryAllocator::kfreePages(m_kstack, KERNEL_STACK_SIZE / MemoryLayout::PAGE_SIZE);
-}
-
 void PCB::sleep(time_t sleepTime) {
     s_running->setState(ProcState::SLEEPING);
     Scheduler::putSleep(s_running, sleepTime);
@@ -127,6 +130,8 @@ void PCB::sleep(time_t sleepTime) {
 
 void PCB::yield() {
     uint64_t sstatus = RiscV::r_sstatus();
+    uint64_t sepc = RiscV::r_sepc();
     dispatch();
+    RiscV::w_sepc(sepc);
     RiscV::w_sstatus(sstatus);
 }

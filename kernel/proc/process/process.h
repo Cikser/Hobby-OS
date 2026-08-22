@@ -12,7 +12,7 @@ class Thread;
 
 class Process : public PCB {
 public:
-    ~Process() override = default;
+    ~Process() override;
     void* operator new(size_t size) {
         if (!s_cache) {
             s_cache = new KMemCache<Process>();

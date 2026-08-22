@@ -73,6 +73,13 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
     registerProcess(this);
 }
 
+Process::~Process() {
+    if (m_pmt) {
+        VM::destroyPMT(m_pmt);
+        m_pmt = nullptr;
+    }
+}
+
 void Process::clear() {
     unregisterProcess(this);
 
@@ -92,12 +99,10 @@ void Process::clear() {
         MemoryAllocator::kfree(m_cwdPath);
         m_cwdPath = nullptr;
     }
-    VM::destroyPMT(m_pmt);
     /*if (m_signalHandler && m_signalHandler->release()) {
         delete m_signalHandler;
         m_signalHandler = nullptr;
     }*/
-    PCB::clear();
 }
 
 uint64_t Process::setupInitialStack(const char* path, const ElfLoadInfo& elfInfo, uint8_t* randomBytes16,
@@ -299,6 +304,8 @@ int Process::exec(const char* elfPath, char* argv[], char* envp[]) {
         m_spaceLock.release();
         return -1;
     }
+
+    if (m_signalHandler) m_signalHandler->resetForExec();
 
     m_ustack = newUstack;
     uint64_t ustackPa = MemoryLayout::v2p((uint64_t)m_ustack);

@@ -200,6 +200,9 @@ void SignalHandler::signalDispatch(TrapFrame* tf) {
         return;
     }
 
+    Console::kprintf("signalDispatch: pid=%ld sig=%d handler=0x%lx restorer=0x%lx old_sepc=0x%lx\n",
+        (long)PCB::currentPid(), signum, action.sa_handler, action.sa_restorer, tf->sepc);
+
     PCB::running()->m_sigMask = threadMask | (action.sa_mask & ~(sigBit(SIGKILL) | sigBit(SIGSTOP)));
 
     tf->sp   = newSp;

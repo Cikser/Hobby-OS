@@ -66,8 +66,8 @@ $(DISK_IMG): user/init.elf user/hello_musl.elf user/dash.elf
 	@printf "%s\n" "writeable"    > $(BUILD_DIR)/kfs_root/writable.txt
 	@printf "%s\n" "nested file"  > $(BUILD_DIR)/kfs_root/subdir/nested.txt
 	@python3 -c "print('x' * 5000, end='')" > $(BUILD_DIR)/kfs_root/large.txt
-	@cp user/init.elf $(BUILD_DIR)/kfs_root/bin/init.elf
-	@cp user/hello_musl.elf $(BUILD_DIR)/kfs_root/bin/hello_musl.elf
+	@cp user/init.elf $(BUILD_DIR)/kfs_root/bin/init
+	@cp user/hello_musl.elf $(BUILD_DIR)/kfs_root/bin/hello_musl
 	@cp user/dash.elf $(BUILD_DIR)/kfs_root/bin/sh
 	@dd if=/dev/zero of=$(DISK_IMG) bs=1K count=$(DISK_BLOCKS_1K) 2>/dev/null
 	@mkfs.ext2 -F -b 1024 -d $(BUILD_DIR)/kfs_root -L "kfs" $(DISK_IMG) >/dev/null

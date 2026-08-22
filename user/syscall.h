@@ -819,6 +819,10 @@ static inline int membarrier(int cmd, int flags, int cpu_id) {
     return (int)_SC3(SYS_MEMBARRIER, cmd, flags, cpu_id);
 }
 
+static inline int ioctl(int fd, unsigned long req, unsigned long arg) {
+    return (int)_SC3(SYS_IOCTL, fd, req, arg);
+}
+
 #define SYS_SETPGID 154
 #define SYS_GETPGID 155
 #define SYS_SETSID  157
@@ -851,10 +855,6 @@ static inline pid_t tcgetpgrp(int fd) {
 static inline int tcsetpgrp(int fd, pid_t pgrp) {
     int p = (int)pgrp;
     return ioctl(fd, TIOCSPGRP, (unsigned long)&p);
-}
-
-static inline int ioctl(int fd, unsigned long req, unsigned long arg) {
-    return (int)_SC3(SYS_IOCTL, fd, req, arg);
 }
 
 static inline size_t strlen(const char* s) {

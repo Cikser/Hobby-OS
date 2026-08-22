@@ -14,6 +14,8 @@
 
 KMemCache<Process>* Process::s_cache = nullptr;
 Process* Process::s_init = nullptr;
+Lock Process::s_allLock = Lock();
+Process* Process::s_allHead = nullptr;
 
 Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
     PCB(entry, pmt),

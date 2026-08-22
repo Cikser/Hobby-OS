@@ -312,6 +312,9 @@ static inline pid_t waitpid3(pid_t pid, int* status, int options) {
     return wait4(pid, status, options);
 }
 
+#define WIFSIGNALED(s) (((signed char)(((s) & 0x7f) + 1) >> 1) > 0)
+#define WTERMSIG(s)    ((s) & 0x7f)
+
 static inline int execve(const char* path, char* const argv[], char* const envp[]) {
     return (int)_SC3(SYS_EXECVE, path, argv, envp);
 }

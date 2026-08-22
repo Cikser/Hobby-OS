@@ -111,7 +111,7 @@ static bool executeDefault(int signum, TrapFrame* tf) {
 
         case SigDefaultAction::TERM:
         case SigDefaultAction::CORE:
-            proc->exit(-(signum));
+            proc->exitViaSignal(signum);
             return false;
 
         case SigDefaultAction::STOP:

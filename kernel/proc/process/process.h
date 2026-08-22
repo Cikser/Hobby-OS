@@ -43,6 +43,7 @@ public:
     int closeFile(int fd) const;
     SegmentTable* segmentTable() const { return m_segTable; };
     void exit(int exitCode) override;
+    void exitViaSignal(int signum);
 
     static constexpr int WNOHANG = 1;
     static constexpr int WUNTRACED = 2;
@@ -107,6 +108,7 @@ private:
     Process* m_nextSibling;
     Process* m_firstChild;
     int m_exitCode;
+    int m_termSignal;
     Semaphore m_selfSem;
     mutable Lock m_spaceLock;
     Mmap* m_mmap;

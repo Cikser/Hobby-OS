@@ -729,7 +729,7 @@ static void test_fork_basic(void) {
     int status = 0;
     pid_t w = waitpid(child, &status);
     check(w == child, "waitpid returns correct child pid");
-    check(status == 42, "child exit code == 42");
+    check(WEXITSTATUS(status) == 42, "child exit code == 42");
 }
 
 /* ------------------------------------------------------------------ */
@@ -776,7 +776,7 @@ static void test_fork_memory(void) {
         }
         int st = 0;
         waitpid(child, &st);
-        check(st == 0x22, "child saw its own mmap write");
+        check(WEXITSTATUS(st) == 0x22, "child saw its own mmap write");
         check(((unsigned char*)mp)[0] == 0x11, "parent mmap unaffected by child");
         munmap(mp, 4096);
     }
@@ -803,7 +803,7 @@ static void test_fork_fd_inherit(void) {
     }
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "child can read from inherited fd");
+    check(WEXITSTATUS(st) == 0, "child can read from inherited fd");
 
     close(fd);
 }
@@ -823,11 +823,11 @@ static void test_fork_chain(void) {
         }
         int st = 0;
         waitpid(c2, &st);
-        exit(st == 77 ? 0 : 1);
+        exit(WEXITSTATUS(st) == 77 ? 0 : 1);
     }
     int st = 0;
     waitpid(c1, &st);
-    check(st == 0, "fork chain: grandchild exit propagates correctly");
+    check(WEXITSTATUS(st) == 0, "fork chain: grandchild exit propagates correctly");
 }
 
 /* ------------------------------------------------------------------ */
@@ -858,7 +858,7 @@ static void test_exit_codes(void) {
         if (c == 0) exit(codes[i]);
         int st = 0;
         waitpid(c, &st);
-        check(st == codes[i], "exit code round-trip");
+        check(WEXITSTATUS(st) == codes[i], "exit code round-trip");
     }
 }
 
@@ -878,7 +878,7 @@ static void test_execve(void) {
     }
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "execve /bin/init succeeds (exits 0)");
+    check(WEXITSTATUS(st) == 0, "execve /bin/init succeeds (exits 0)");
 
     child = fork();
     if (child == 0) {
@@ -888,7 +888,7 @@ static void test_execve(void) {
         exit(123);
     }
     waitpid(child, &st);
-    check(st == 123, "execve nonexistent binary fails, falls through");
+    check(WEXITSTATUS(st) == 123, "execve nonexistent binary fails, falls through");
 
     child = fork();
     if (child == 0) {
@@ -896,7 +896,7 @@ static void test_execve(void) {
         exit(124);
     }
     waitpid(child, &st);
-    check(st == 124, "execve NULL path fails");
+    check(WEXITSTATUS(st) == 124, "execve NULL path fails");
 }
 
 /* ------------------------------------------------------------------ */
@@ -951,7 +951,7 @@ static void test_fork_mmap_shared(void) {
     }
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "child read parent value in shared mapping");
+    check(WEXITSTATUS(st) == 0, "child read parent value in shared mapping");
     check(((unsigned char*)p)[0] == 0x02, "parent sees child write via MAP_SHARED");
 
     munmap(p, 4096);
@@ -1623,7 +1623,7 @@ static void test_concurrent_file_access(void) {
     for (int i = 0; i < N; i++) {
         int st = 0;
         waitpid(pids[i], &st);
-        if (st != 0) ok = 0;
+        if (WEXITSTATUS(st) != 0) ok = 0;
     }
     check(ok, "all concurrent children exited 0");
 
@@ -2216,7 +2216,7 @@ static void test_getppid(void) {
     }
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "child getppid == parent getpid");
+    check(WEXITSTATUS(st) == 0, "child getppid == parent getpid");
 
     check(getppid() != getpid(), "ppid != pid");
 }
@@ -2881,7 +2881,7 @@ static void test_sigterm_default(void) {
     int st = 0;
     pid_t w = waitpid(child, &st);
     check(w == child, "waitpid returns child pid");
-    check(st != 200,  "child did not reach exit(200)");
+    check(WIFSIGNALED(st) && WTERMSIG(st) == SIGTERM, "child did not reach exit(200)");
 }
 
 /* ------------------------------------------------------------------ */
@@ -2908,7 +2908,7 @@ static void test_sigkill_uncatchable(void) {
     }
     int st = 0;
     waitpid(child, &st);
-    check(st != 77, "child killed by SIGKILL (did not reach exit(77))");
+    check(WIFSIGNALED(st) && WTERMSIG(st) == SIGKILL, "child killed by SIGKILL (did not reach exit(77))");
 }
 
 /* ------------------------------------------------------------------ */
@@ -3024,7 +3024,7 @@ static void test_signal_fork_inherit(void) {
 
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "child did not inherit pending SIGUSR1");
+    check(WEXITSTATUS(st) == 0, "child did not inherit pending SIGUSR1");
 
     signal(SIGUSR1, SIG_DFL);
 }
@@ -3046,7 +3046,7 @@ static void test_signal_exec_reset(void) {
     }
     int st = 0;
     waitpid(child, &st);
-    check(st == 0, "execve child exits 0 (/bin/init re-executed)");
+    check(WEXITSTATUS(st) == 0, "execve child exits 0 (/bin/init re-executed)");
 }
 
 /* ------------------------------------------------------------------ */
@@ -3139,7 +3139,7 @@ static void test_signal_stress(void) {
     for (int i = 0; i < N; i++) {
         int st = 0;
         pid_t r = waitpid(pids[i], &st);
-        if (r != pids[i] || st == 0) { ok = 0; }
+        if (r != pids[i] || !(WIFSIGNALED(st) && WTERMSIG(st) == SIGTERM)) { ok = 0; }
     }
     check(ok, "all children terminated by SIGTERM and reaped");
 }
@@ -3418,7 +3418,7 @@ static void test_pipe(void) {
 
         int st = 0;
         waitpid(child, &st);
-        check(st == 0, "pipe IPC child exited 0");
+        check(WEXITSTATUS(st) == 0, "pipe IPC child exited 0");
         check(total == 15 && strcmp(buf, "child to parent") == 0, 
               "parent received correct string from child via pipe");
     }
@@ -3516,7 +3516,7 @@ static void test_wait_wnohang(void) {
 
     r = waitpid3(child, &status, 0);
     check(r == child, "blocking waitpid reaps child eventually");
-    check(status == 0, "child exit status correct");
+    check(WEXITSTATUS(status) == 0, "child exit status correct");
 
     r = waitpid3(child, &status, WNOHANG);
     check(r < 0, "WNOHANG on already-reaped child returns error");
@@ -3545,7 +3545,7 @@ static void test_sigstop_sigcont(void) {
     int status = 0;
     pid_t w = waitpid(child, &status);
     check(w == child, "child eventually reaped after STOP+CONT");
-    check(status == 55, "child resumed and exited with correct code after SIGCONT");
+    check(WEXITSTATUS(status) == 55, "child resumed and exited with correct code after SIGCONT");
 }
 
 /* ------------------------------------------------------------------ */

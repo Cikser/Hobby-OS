@@ -24,6 +24,7 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
     m_nextSibling(nullptr),
     m_firstChild(nullptr),
     m_exitCode(0),
+    m_termSignal(0),
     m_selfSem(Semaphore(0)),
     m_spaceLock(Lock()),
     m_mmap(nullptr),
@@ -447,6 +448,11 @@ void Process::exit(int exitCode) {
     yield();
 }
 
+void Process::exitViaSignal(int signum) {
+    m_termSignal = signum;
+    exit(0);
+}
+
 pid_t Process::wait(pid_t pid, int* status, int options) {
     m_lock.acquire();
     if (!m_firstChild) {
@@ -507,7 +513,12 @@ pid_t Process::wait(pid_t pid, int* status, int options) {
     m_lock.release();
 
     pid_t retPid = zombie->m_pid;
-    if (status) *status = zombie->m_exitCode;
+    if (status) {
+        if (zombie->m_termSignal != 0)
+            *status = zombie->m_termSignal & 0x7f;
+        else
+            *status = (zombie->m_exitCode & 0xff) << 8;
+    }
 
     zombie->m_reaped = true;
     return retPid;

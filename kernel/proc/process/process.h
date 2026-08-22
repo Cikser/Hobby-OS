@@ -24,7 +24,7 @@ public:
         s_cache->free(ptr);
     }
 
-    static Process* createInit();
+    static Process* createInit(const char* path);
     Thread* createThread(void(*entry)(void*), void* args = nullptr);
     char* resolveRelative(const char* path) const;
     char* cwd() const;

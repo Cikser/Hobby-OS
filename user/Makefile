@@ -15,13 +15,16 @@ init.elf: init.c init.ld syscall.h
 	$(CC) $(CFLAGS) -c init.c -o init.o
 	$(LD) -T init.ld -o init.elf init.o
 
-hello_musl: hello_musl.c
+hello_musl.elf: hello_musl.c
 	@if [ ! -x "$(MUSL_CC)" ]; then \
 		echo "musl toolchain not found at $(MUSL_CC)"; \
 		echo "run: ./scripts/install_musl.sh"; \
 		exit 1; \
 	fi
-	$(MUSL_CC) $(MUSL_FLAGS) -o hello_musl hello_musl.c
+	$(MUSL_CC) $(MUSL_FLAGS) -o hello_musl.elf hello_musl.c
+
+dash.elf: ../shell/dash
+	@cp ../shell/dash dash.elf
 
 clean:
-	rm -f init.o init.elf hello_musl
+	rm -f *.o *.elf

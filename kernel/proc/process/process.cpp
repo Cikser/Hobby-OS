@@ -197,17 +197,17 @@ Process* Process::findProcess(pid_t pid) {
     return findByPid(pid);
 }
 
-Process* Process::createInit() {
+Process* Process::createInit(const char* path) {
     PMT* pmt = VM::createPMT();
     auto proc = new Process(pmt, -1, nullptr);
 
-    ElfLoadInfo* info = ElfLoader::load("/bin/init", pmt, proc->m_segTable);
+    ElfLoadInfo* info = ElfLoader::load(path, pmt, proc->m_segTable);
     if (!info || !info->entry)
         Console::panic("Process::createInit(): failed to load ELF");
 
     uint8_t randomBytes[16] = {0};
 
-    uint64_t initialSp = proc->setupInitialStack("/bin/init", *info, randomBytes, nullptr, nullptr);
+    uint64_t initialSp = proc->setupInitialStack(path, *info, randomBytes, nullptr, nullptr);
 
     proc->m_entry = info->entry;
     proc->m_trapFrame->sepc = info->entry;

@@ -24,7 +24,7 @@ int main() {
 	Disk::init();
 	VFS::init();
 	auto main = new Thread(nullptr);
-	Process* initProc = Process::createInit();
+	Process* initProc = Process::createInit("/bin/sh");
 	Disk::enableInterruptMode();
 	RiscV::ms_sstatus(RiscV::SSTATUS_SIE);
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);

@@ -84,6 +84,8 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_SETPGID: tf->a0 = sys_setpgid(tf); break;
     case SYS_GETPGID: tf->a0 = sys_getpgid(tf); break;
     case SYS_SETSID: tf->a0 = sys_setsid(tf); break;
+    case SYS_SYMLINKAT: tf->a0 = sys_symlinkat(tf); break;
+    case SYS_FACCESSAT: tf->a0 = sys_faccessat(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -1;
@@ -827,20 +829,47 @@ uint64_t SyscallHandler::sys_readlinkat(TrapFrame* tf) {
     if (!PCB::runningProcess()->checkOperation(buf, bufsize, SegmentDesc::SEG_W))
         return (uint64_t)-1;
 
-    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     if (strcmp((const char*)path, "/proc/self/exe") == 0 ||
         strcmp((const char*)path, "/proc/self/fd/0") == 0) {
         const char* fake = "/bin/init";
         uint64_t len = 0;
         while (fake[len]) len++;
         if (len > bufsize) len = bufsize;
+        RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
         memcpy((void*)buf, fake, len);
         RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
         return (int64_t)len;
     }
+
+    VfsInode* inode = VFS::resolvePath(path, false);
+    if (!inode) return (uint64_t)-2; // ENOENT
+
+    if (!inode->isSymlink()) {
+        VFS::putInode(inode, inode->inodeNum());
+        return (uint64_t)-22; // EINVAL
+    }
+
+    char* kbuf = (char*)MemoryAllocator::kmalloc(bufsize);
+    if (!kbuf) {
+        VFS::putInode(inode, inode->inodeNum());
+        return (uint64_t)-12; // ENOMEM
+    }
+
+    int n = inode->readlink(kbuf, bufsize);
+    uint32_t inum = inode->inodeNum();
+    VFS::putInode(inode, inum);
+
+    if (n < 0) {
+        MemoryAllocator::kfree(kbuf);
+        return (uint64_t)-22;
+    }
+
+    RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
+    memcpy((void*)buf, kbuf, n);
     RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
 
-    return (uint64_t)-1;
+    MemoryAllocator::kfree(kbuf);
+    return (uint64_t)n;
 }
 
 static constexpr int F_DUPFD = 0;
@@ -1586,4 +1615,33 @@ uint64_t SyscallHandler::sys_setsid(TrapFrame* tf) {
     if (!proc) return (uint64_t)-1;
 
     return (uint64_t)(int64_t)proc->setsid();
+}
+
+uint64_t SyscallHandler::sys_faccessat(TrapFrame* tf) {
+    uint64_t pathAddr = tf->a1;
+
+    AutoPath path(copyPathFromUser(pathAddr));
+    if (!path.valid()) return (uint64_t)-14;
+
+    VfsInode* inode = VFS::resolvePath(path);
+    if (!inode) return (uint64_t)-2; // ENOENT
+
+    uint32_t num = inode->inodeNum();
+    VFS::putInode(inode, num);
+    return 0; // stub: kernel nema permission model, samo provera postojanja
+}
+
+uint64_t SyscallHandler::sys_symlinkat(TrapFrame* tf) {
+    uint64_t targetAddr = tf->a0;
+    int newdirfd = (int)(int64_t)tf->a1;
+    uint64_t linkpathAddr = tf->a2;
+
+    AutoPath target(copyPathFromUser(targetAddr));
+    if (!target.valid()) return (uint64_t)-14;
+
+    AutoPath linkpath(copyPathFromUser(linkpathAddr));
+    if (!linkpath.valid()) return (uint64_t)-14;
+
+    int ret = VFS::symlink(target, linkpath);
+    return ret == 0 ? 0 : (uint64_t)-1;
 }

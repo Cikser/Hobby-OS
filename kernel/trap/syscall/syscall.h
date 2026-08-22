@@ -11,7 +11,9 @@ enum Syscall {
     SYS_FCNTL = 25,
     SYS_IOCTL = 29,
     SYS_UNLINKAT = 35,
+    SYS_SYMLINKAT = 36,
     SYS_FTRUNCATE = 46,
+    SYS_FACCESSAT = 48,
     SYS_CHDIR = 49,
     SYS_OPENAT = 56,
     SYS_CLOSE = 57,
@@ -144,6 +146,8 @@ private:
     static uint64_t sys_setpgid(TrapFrame* tf);
     static uint64_t sys_getpgid(TrapFrame* tf);
     static uint64_t sys_setsid(TrapFrame* tf);
+    static uint64_t sys_symlinkat(TrapFrame* tf);
+    static uint64_t sys_faccessat(TrapFrame* tf);
 };
 
 #endif

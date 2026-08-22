@@ -348,6 +348,31 @@ VfsInode* Ext2Mount::create(VfsInode* parent, const char* path) {
     return new Ext2Inode(this, num, raw);
 }
 
+VfsInode* Ext2Mount::symlink(VfsInode* parent, const char* name, const char* target) {
+    auto dir = (Ext2Inode*)parent;
+    uint32_t group = (dir->inodeNum() - 1) / m_sb.s_inodes_per_group;
+
+    uint64_t targetLen = strlen(target);
+    if (targetLen >= 60) return nullptr;
+
+    uint32_t num = allocInode(group, false);
+    if (!num) return nullptr;
+
+    Ext2InodeDisk raw = {};
+    raw.i_mode = EXT2_S_IFLNK | 0777;
+    raw.i_links_count = 1;
+    raw.i_size = targetLen;
+    memcpy(raw.i_block, target, targetLen);
+    writeRawInode(num, raw);
+
+    if (addDirEntry(dir, num, name, EXT2_FT_SYMLINK) < 0) {
+        freeInode(num);
+        return nullptr;
+    }
+
+    return new Ext2Inode(this, num, raw);
+}
+
 int Ext2Mount::mkdir(VfsInode* parent, const char* path) {
     auto dir = (Ext2Inode*)parent;
     uint32_t group = (dir->inodeNum() - 1) / m_sb.s_inodes_per_group;
@@ -836,4 +861,17 @@ int Ext2Inode::truncate(uint64_t size) {
     m_mount->m_inodeMutex.signal();
 
     return 0;
+}
+
+bool Ext2Inode::isSymlink() {
+    return (m_raw.i_mode & 0xF000) == EXT2_S_IFLNK;
+}
+
+int Ext2Inode::readlink(char* buf, uint64_t bufsize) {
+    if (!isSymlink()) return -1;
+    uint64_t len = m_raw.i_size;
+    if (len > 60) return -1;
+    uint64_t toCopy = (len < bufsize) ? len : bufsize;
+    memcpy(buf, (const char*)m_raw.i_block, toCopy);
+    return (int)toCopy;
 }

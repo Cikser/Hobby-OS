@@ -602,6 +602,30 @@ static inline int sigismember(const sigset_t* s, int sig) {
 #define F_SETFL    4
 #define FD_CLOEXEC 1
 
+#define SYS_SYMLINKAT 36
+#define SYS_FACCESSAT 48
+
+#define F_OK 0
+#define R_OK 4
+#define W_OK 2
+#define X_OK 1
+
+static inline int symlinkat(const char* target, int newdirfd, const char* linkpath) {
+    return (int)_SC3(SYS_SYMLINKAT, target, newdirfd, linkpath);
+}
+
+static inline int symlink(const char* target, const char* linkpath) {
+    return symlinkat(target, AT_FDCWD, linkpath);
+}
+
+static inline int faccessat(int dirfd, const char* path, int mode, int flags) {
+    return (int)_SC4(SYS_FACCESSAT, dirfd, path, mode, flags);
+}
+
+static inline int access(const char* path, int mode) {
+    return faccessat(AT_FDCWD, path, mode, 0);
+}
+
 #define RUSAGE_SELF     0
 #define RUSAGE_CHILDREN (-1)
 

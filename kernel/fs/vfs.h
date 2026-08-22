@@ -12,13 +12,14 @@ public:
     static int mkdir(const char* path);
     static int create(const char* path);
     static int unlink(const char* path, uint32_t flags);
+    static int symlink(const char* target, const char* linkPath);
 
     static constexpr uint32_t AT_REMOVEDIR = 0x200;
 
 private:
     friend class Process;
     friend class SyscallHandler;
-    static VfsInode* resolvePath(const char* path);
+    static VfsInode* resolvePath(const char* path, bool followFinal = true, int depth = 0);
     static VfsInode* resolveParent(const char* path, const char** outName);
 
     static VfsInode* getInode(uint32_t inodeNum);

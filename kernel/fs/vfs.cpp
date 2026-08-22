@@ -117,6 +117,32 @@ int VFS::create(const char* path) {
     return 0;
 }
 
+int VFS::symlink(const char* target, const char* linkPath) {
+    if (!m_mount) return -1;
+
+    const char* name = nullptr;
+    VfsInode* parent = resolveParent(linkPath, &name);
+    if (!parent) return -1;
+    if (!parent->isDir()) {
+        putInode(parent, parent->inodeNum());
+        return -1;
+    }
+    if (!name || *name == '\0') {
+        putInode(parent, parent->inodeNum());
+        return -1;
+    }
+
+    VfsInode* created = m_mount->symlink(parent, name, target);
+    putInode(parent, parent->inodeNum());
+    if (!created) return -1;
+
+    uint32_t num = created->inodeNum();
+    PathCache::insert(linkPath, num);
+    InodeCache::insert(m_mount, num, created);
+    InodeCache::release(m_mount, num);
+    return 0;
+}
+
 int VFS::unlink(const char* path, uint32_t flags) {
     if (!m_mount) return -1;
 
@@ -155,8 +181,11 @@ int VFS::unlink(const char* path, uint32_t flags) {
     return ret;
 }
 
-VfsInode* VFS::resolvePath(const char* path) {
+static constexpr int MAX_SYMLINK_DEPTH = 8;
+
+VfsInode* VFS::resolvePath(const char* path, bool followFinal, int depth) {
     if (!m_mount) return nullptr;
+    if (depth > MAX_SYMLINK_DEPTH) return nullptr;
 
     char* absolutePath = nullptr;
 
@@ -171,14 +200,16 @@ VfsInode* VFS::resolvePath(const char* path) {
 
     if (!absolutePath) return nullptr;
 
-    uint32_t cachedNum = PathCache::lookup(absolutePath);
-    if (cachedNum != 0) {
-        VfsInode* inode = getInode(cachedNum);
-        if (inode) {
-            MemoryAllocator::kfree(absolutePath);
-            return inode;
+    if (followFinal) {
+        uint32_t cachedNum = PathCache::lookup(absolutePath);
+        if (cachedNum != 0) {
+            VfsInode* inode = getInode(cachedNum);
+            if (inode) {
+                MemoryAllocator::kfree(absolutePath);
+                return inode;
+            }
+            PathCache::invalidate(absolutePath);
         }
-        PathCache::invalidate(absolutePath);
     }
 
     VfsInode* current = getInode(2);
@@ -195,6 +226,7 @@ VfsInode* VFS::resolvePath(const char* path) {
         while (*p != '\0' && *p != '/' && len < PATH_MAX)
             component[len++] = *p++;
         component[len] = '\0';
+        bool isLast = (*p == '\0');
         if (*p == '/') p++;
         if (len == 0) continue;
 
@@ -222,8 +254,52 @@ VfsInode* VFS::resolvePath(const char* path) {
             MemoryAllocator::kfree(absolutePath);
             return nullptr;
         }
+
+        if (current->isSymlink() && (!isLast || followFinal)) {
+            char* linkBuf = (char*)MemoryAllocator::kmalloc(PATH_MAX + 1);
+            if (!linkBuf) {
+                putInode(current, current->inodeNum());
+                MemoryAllocator::kfree(component);
+                MemoryAllocator::kfree(absolutePath);
+                return nullptr;
+            }
+
+            int n = current->readlink(linkBuf, PATH_MAX);
+            uint32_t curNum = current->inodeNum();
+            putInode(current, curNum);
+
+            if (n <= 0 || linkBuf[0] != '/') {
+                MemoryAllocator::kfree(linkBuf);
+                MemoryAllocator::kfree(component);
+                MemoryAllocator::kfree(absolutePath);
+                return nullptr;
+            }
+            linkBuf[n] = '\0';
+
+            uint64_t targetLen = (uint64_t)n;
+            uint64_t remLen = strlen(p);
+            char* newPath = (char*)MemoryAllocator::kmalloc(targetLen + 1 + remLen + 1);
+            memcpy(newPath, linkBuf, targetLen);
+            uint64_t pos = targetLen;
+            if (remLen > 0) {
+                newPath[pos++] = '/';
+                memcpy(newPath + pos, p, remLen);
+                pos += remLen;
+            }
+            newPath[pos] = '\0';
+
+            MemoryAllocator::kfree(linkBuf);
+            MemoryAllocator::kfree(component);
+            MemoryAllocator::kfree(absolutePath);
+
+            VfsInode* result = resolvePath(newPath, followFinal, depth + 1);
+            MemoryAllocator::kfree(newPath);
+            return result;
+        }
     }
-    PathCache::insert(absolutePath, current->inodeNum());
+
+    if (followFinal)
+        PathCache::insert(absolutePath, current->inodeNum());
 
     MemoryAllocator::kfree(component);
     MemoryAllocator::kfree(absolutePath);

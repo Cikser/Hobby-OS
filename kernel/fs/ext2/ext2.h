@@ -30,6 +30,8 @@ public:
     int stat(InodeStat* out) override;
     uint32_t inodeNum() const override { return m_num; }
     int truncate(uint64_t size) override;
+    bool isSymlink() override;
+    int readlink(char* buf, uint64_t bufsize) override;
 
 private:
     friend class Ext2Mount;
@@ -53,6 +55,7 @@ public:
     int mkdir(VfsInode* parent, const char* path) override;
     VfsInode* create(VfsInode* parent, const char* path) override;
     int unlink(VfsInode* parent, const char* path) override;
+    VfsInode* symlink(VfsInode* parent, const char* name, const char* target) override;
 
 private:
     friend class Ext2Inode;

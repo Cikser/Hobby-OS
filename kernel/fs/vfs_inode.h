@@ -48,6 +48,8 @@ public:
     virtual void onOpen(uint32_t flags) {}
     virtual void onClose(uint32_t flags) {}
     virtual int ioctl(uint64_t req, void* argp) { return -1; }
+    virtual bool isSymlink() { return false; }
+    virtual int readlink(char* buf, uint64_t bufsize) { return -1; }
 };
 
 class VfsMount {
@@ -59,6 +61,7 @@ public:
     virtual int mkdir(VfsInode* parent, const char* path) = 0;
     virtual VfsInode* create(VfsInode* parent, const char* path) = 0;
     virtual int unlink(VfsInode* parent, const char* path) = 0;
+    virtual VfsInode* symlink(VfsInode* parent, const char* name, const char* target) = 0;
 };
 
 #endif

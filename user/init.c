@@ -3548,6 +3548,60 @@ static void test_sigstop_sigcont(void) {
     check(WEXITSTATUS(status) == 55, "child resumed and exited with correct code after SIGCONT");
 }
 
+static void test_symlink(void) {
+    section("93. symlink / readlink");
+
+    int fd = open("/symlink_target.txt", O_RDWR | O_CREAT | O_TRUNC);
+    check(fd >= 0, "create symlink target file");
+    if (fd >= 0) {
+        write(fd, "hello via symlink", 17);
+        close(fd);
+    }
+
+    int r = symlink("/symlink_target.txt", "/symlink_link.txt");
+    check(r == 0, "symlink() creates link");
+
+    char buf[64];
+    ssize_t n = readlink("/symlink_link.txt", buf, sizeof(buf));
+    check(n == (ssize_t)strlen("/symlink_target.txt"), "readlink returns correct length");
+    if (n > 0) {
+        buf[n] = '\0';
+        check(strcmp(buf, "/symlink_target.txt") == 0, "readlink content correct");
+    }
+
+    int lfd = open("/symlink_link.txt", O_RDONLY);
+    check(lfd >= 0, "open() follows symlink");
+    if (lfd >= 0) {
+        char rbuf[32];
+        int rn = (int)read(lfd, rbuf, 32);
+        check(rn == 17 && memcmp(rbuf, "hello via symlink", 17) == 0,
+              "content read through symlink matches target");
+        close(lfd);
+    }
+
+    r = symlink("/nonexistent_target_xyz", "/dangling_link");
+    check(r == 0, "symlink to nonexistent target still succeeds (lazy)");
+
+    int dfd = open("/dangling_link", O_RDONLY);
+    check(dfd < 0, "opening dangling symlink fails");
+
+    r = symlink("/symlink_target.txt", "/symlink_link.txt");
+    check(r < 0, "symlink() on existing path fails");
+}
+
+static void test_access(void) {
+    section("94. access / faccessat");
+
+    int r = access("/readme.txt", F_OK);
+    check(r == 0, "access F_OK on existing file succeeds");
+
+    r = access("/no_such_file_xyz.txt", F_OK);
+    check(r < 0, "access F_OK on missing file fails");
+
+    r = access("/readme.txt", R_OK | W_OK);
+    check(r == 0, "access R_OK|W_OK stub succeeds (no permission model)");
+}
+
 /* ------------------------------------------------------------------ */
 /*  main                                                                */
 /* ------------------------------------------------------------------ */
@@ -3662,6 +3716,8 @@ void _start() {
     test_pipe();
     test_wait_wnohang();
     test_sigstop_sigcont();
+    test_symlink();
+    test_access();
 
     print_summary();
     exit(0);

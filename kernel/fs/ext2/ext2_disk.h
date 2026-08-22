@@ -78,7 +78,9 @@ static constexpr uint16_t EXT2_MAGIC = 0xEF53;
 static constexpr uint32_t EXT2_ROOT_INODE = 2;
 static constexpr uint16_t EXT2_S_IFREG = 0x8000;
 static constexpr uint16_t EXT2_S_IFDIR = 0x4000;
+static constexpr uint16_t EXT2_S_IFLNK = 0xA000;
 static constexpr uint8_t EXT2_FT_REG = 1;
 static constexpr uint8_t EXT2_FT_DIR = 2;
+static constexpr uint8_t EXT2_FT_SYMLINK = 7;
 
 #endif

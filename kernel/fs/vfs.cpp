@@ -39,20 +39,36 @@ File* VFS::open(const char* path, uint32_t flags) {
 
     if (!inode) {
         if (!(flags & File::O_CREAT)) return nullptr;
+        char* absPath = nullptr;
+        if (path[0] == '/') {
+            absPath = kstrdup(path, PATH_MAX);
+        } else {
+            Process* running = PCB::runningProcess();
+            if (!running) return nullptr;
+            absPath = running->resolveRelative(path);
+        }
+        if (!absPath) return nullptr;
 
         const char* name = nullptr;
-        VfsInode* parent = resolveParent(path, &name);
-        if (!parent) return nullptr;
+        VfsInode* parent = resolveParent(absPath, &name);
+        if (!parent) {
+            MemoryAllocator::kfree(absPath);
+            return nullptr;
+        }
 
         VfsInode* created = m_mount->create(parent, name);
         putInode(parent, parent->inodeNum());
 
-        if (!created) return nullptr;
+        if (!created) {
+            MemoryAllocator::kfree(absPath);
+            return nullptr;
+        }
 
         uint32_t num = created->inodeNum();
         VfsInode* cached = InodeCache::insert(m_mount, num, created);
 
-        PathCache::insert(path, num);
+        PathCache::insert(absPath, num);
+        MemoryAllocator::kfree(absPath);
 
         return new File(cached, m_mount, flags);
     }

@@ -33,7 +33,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_MPROTECT: tf->a0 = sys_mprotect(tf); break;
     case SYS_GETCWD: tf->a0 = sys_getcwd(tf); break;
     case SYS_CHDIR: tf->a0 = sys_chdir(tf); break;
-    case SYS_MKDIR: tf->a0 = sys_mkdir(tf); break;
+    case SYS_MKDIRAT: tf->a0 = sys_mkdirat(tf); break;
     case SYS_FSTAT: tf->a0 = sys_fstat(tf); break;
     case SYS_EXIT_GROUP: tf->a0 = sys_exit_group(tf); break;
     case SYS_CLOCK_GETTIME: tf->a0 = sys_clock_gettime(tf); break;
@@ -86,6 +86,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_SETSID: tf->a0 = sys_setsid(tf); break;
     case SYS_SYMLINKAT: tf->a0 = sys_symlinkat(tf); break;
     case SYS_FACCESSAT: tf->a0 = sys_faccessat(tf); break;
+    case SYS_UTIMENSAT: tf->a0 = sys_utimensat(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -38;
@@ -427,11 +428,11 @@ uint64_t SyscallHandler::sys_chdir(TrapFrame* tf) {
     return (ret == 0) ? 0 : (uint64_t)-1;
 }
 
-uint64_t SyscallHandler::sys_mkdir(TrapFrame* tf) {
-    auto mode = (uint32_t)tf->a1;
+uint64_t SyscallHandler::sys_mkdirat(TrapFrame* tf) {
+    auto mode = (uint32_t)tf->a2;
 
-    AutoPath path(copyPathFromUser(tf->a0));
-    if (!path.valid()) return -1;
+    AutoPath path(copyPathFromUser(tf->a1));
+    if (!path.valid()) return (uint64_t)-14;
 
     int ret = PCB::runningProcess()->mkdir(path, mode);
     return (ret == 0) ? 0 : (uint64_t)-1;
@@ -1644,4 +1645,8 @@ uint64_t SyscallHandler::sys_symlinkat(TrapFrame* tf) {
 
     int ret = VFS::symlink(target, linkpath);
     return ret == 0 ? 0 : (uint64_t)-1;
+}
+
+uint64_t SyscallHandler::sys_utimensat(TrapFrame* tf) {
+    return 0;
 }

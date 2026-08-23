@@ -10,6 +10,7 @@ enum Syscall {
     SYS_DUP3 = 24,
     SYS_FCNTL = 25,
     SYS_IOCTL = 29,
+    SYS_MKDIRAT = 34,
     SYS_UNLINKAT = 35,
     SYS_SYMLINKAT = 36,
     SYS_FTRUNCATE = 46,
@@ -29,7 +30,7 @@ enum Syscall {
     SYS_READLINKAT = 78,
     SYS_NEWFSTATAT = 79,
     SYS_FSTAT = 80,
-    SYS_MKDIR = 83,
+    SYS_UTIMENSAT = 88,
     SYS_EXIT = 93,
     SYS_EXIT_GROUP = 94,
     SYS_SET_TID_ADDRESS = 96,
@@ -95,7 +96,7 @@ private:
     static uint64_t sys_mprotect(TrapFrame* tf);
     static uint64_t sys_getcwd(TrapFrame* tf);
     static uint64_t sys_chdir(TrapFrame* tf);
-    static uint64_t sys_mkdir(TrapFrame* tf);
+    static uint64_t sys_mkdirat(TrapFrame* tf);
     static uint64_t sys_fstat(TrapFrame* tf);
     static uint64_t sys_exit_group(TrapFrame* tf);
     static uint64_t sys_writev(TrapFrame* tf);
@@ -148,6 +149,7 @@ private:
     static uint64_t sys_setsid(TrapFrame* tf);
     static uint64_t sys_symlinkat(TrapFrame* tf);
     static uint64_t sys_faccessat(TrapFrame* tf);
+    static uint64_t sys_utimensat(TrapFrame* tf);
 };
 
 #endif

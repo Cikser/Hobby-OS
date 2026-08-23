@@ -26,7 +26,7 @@ typedef void*              mmap_ptr_t;
 #define SYS_READV           65
 #define SYS_WRITEV          66
 #define SYS_FSTAT           80
-#define SYS_MKDIR           83
+#define SYS_MKDIRAT         34
 #define SYS_EXIT            93
 #define SYS_EXIT_GROUP      94
 #define SYS_SET_TID_ADDRESS 96
@@ -376,7 +376,7 @@ static inline int chdir(const char* path) {
 }
 
 static inline int mkdir(const char* path, uint32_t mode) {
-    return (int)_SC2(SYS_MKDIR, path, mode);
+    return (int)_SC3(SYS_MKDIRAT, AT_FDCWD, path, mode);
 }
 
 static inline void* brk(void* addr) {

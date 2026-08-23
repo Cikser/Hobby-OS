@@ -88,7 +88,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_FACCESSAT: tf->a0 = sys_faccessat(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
-        tf->a0 = -1;
+        tf->a0 = -38;
         break;
     }
 }

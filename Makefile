@@ -57,7 +57,9 @@ $(TARGET): $(OBJS)
 disasm: $(TARGET)
 	@$(OBJDUMP) -d $< > $(DISASM_FILE)
 
-$(DISK_IMG): user/init.elf user/hello_musl.elf user/dash.elf
+BUSYBOX_CMDS := ls cat echo mkdir rm touch pwd true false
+
+$(DISK_IMG): user/init.elf user/hello_musl.elf user/shell.elf
 	@echo "Creating disk image: $(DISK_IMG) ($(DISK_SIZE_MB) MB)"
 	@rm -rf $(BUILD_DIR)/kfs_root
 	@mkdir -p $(BUILD_DIR)/kfs_root/subdir
@@ -68,13 +70,18 @@ $(DISK_IMG): user/init.elf user/hello_musl.elf user/dash.elf
 	@python3 -c "print('x' * 5000, end='')" > $(BUILD_DIR)/kfs_root/large.txt
 	@cp user/init.elf $(BUILD_DIR)/kfs_root/bin/init
 	@cp user/hello_musl.elf $(BUILD_DIR)/kfs_root/bin/hello_musl
-	@cp user/dash.elf $(BUILD_DIR)/kfs_root/bin/sh
+	@cp user/shell.elf $(BUILD_DIR)/kfs_root/bin/sh
+	@# Pravljenje busybox i applet symlink-ova ka /bin/sh
+	@ln -s sh $(BUILD_DIR)/kfs_root/bin/busybox
+	@for cmd in $(BUSYBOX_CMDS); do \
+		ln -s sh $(BUILD_DIR)/kfs_root/bin/$$cmd; \
+	done
 	@dd if=/dev/zero of=$(DISK_IMG) bs=1K count=$(DISK_BLOCKS_1K) 2>/dev/null
 	@mkfs.ext2 -F -b 1024 -d $(BUILD_DIR)/kfs_root -L "kfs" $(DISK_IMG) >/dev/null
-	@echo "Disk image ready"
+	@echo "Disk image ready with BusyBox symlinks"
 
-user/dash.elf: 
-	@$(MAKE) -C user dash.elf
+user/shell.elf: 
+	@$(MAKE) -C user shell.elf
 
 user/init.elf:
 	@$(MAKE) -C user init.elf

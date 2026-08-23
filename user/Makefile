@@ -23,8 +23,8 @@ hello_musl.elf: hello_musl.c
 	fi
 	$(MUSL_CC) $(MUSL_FLAGS) -o hello_musl.elf hello_musl.c
 
-dash.elf: ../shell/dash
-	@cp ../shell/dash dash.elf
+shell.elf: ../shell/shell
+	@cp ../shell/shell shell.elf
 
 clean:
 	rm -f *.o *.elf

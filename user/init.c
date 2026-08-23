@@ -3551,6 +3551,10 @@ static void test_sigstop_sigcont(void) {
 static void test_symlink(void) {
     section("93. symlink / readlink");
 
+    unlink("/symlink_target.txt");
+    unlink("/symlink_link.txt");
+    unlink("/dangling_link");
+
     int fd = open("/symlink_target.txt", O_RDWR | O_CREAT | O_TRUNC);
     check(fd >= 0, "create symlink target file");
     if (fd >= 0) {
@@ -3587,6 +3591,10 @@ static void test_symlink(void) {
 
     r = symlink("/symlink_target.txt", "/symlink_link.txt");
     check(r < 0, "symlink() on existing path fails");
+
+    unlink("/symlink_target.txt");
+    unlink("/symlink_link.txt");
+    unlink("/dangling_link");
 }
 
 static void test_access(void) {

@@ -137,7 +137,6 @@ int VFS::symlink(const char* target, const char* linkPath) {
     if (!created) return -1;
 
     uint32_t num = created->inodeNum();
-    PathCache::insert(linkPath, num);
     InodeCache::insert(m_mount, num, created);
     InodeCache::release(m_mount, num);
     return 0;

@@ -11,6 +11,7 @@
 #include "../../mm/vm/vm.h"
 #include "../elf/elf.h"
 #include "../../io/terminal/tty_inode.h"
+#include "../sync/futex.h"
 
 KMemCache<Process>* Process::s_cache = nullptr;
 Process* Process::s_init = nullptr;
@@ -759,18 +760,26 @@ int Process::kill(int signum) {
             m_waitingOn->forceRemove(this);
             m_waitingOn = nullptr;
         }
+        if (m_waitingOnFutexKey) {
+            Futex::forceRemove(m_waitingOnFutexKey, this);
+            m_waitingOnFutexKey = 0;
+        }
         setState(ProcState::READY);
         Scheduler::put(this);
     }
     Thread* t = m_threads;
     while (t) {
-        if (t->m_state == ProcState::SLEEPING || t->m_state == ProcState::BLOCKED) {
-            if (t->m_waitingOn) {
-                t->m_waitingOn->forceRemove(t);
-                t->m_waitingOn = nullptr;
+        if (m_state == ProcState::SLEEPING || m_state == ProcState::BLOCKED) {
+            if (m_waitingOn) {
+                m_waitingOn->forceRemove(this);
+                m_waitingOn = nullptr;
             }
-            t->setState(ProcState::READY);
-            Scheduler::put(t);
+            if (m_waitingOnFutexKey) {
+                Futex::forceRemove(m_waitingOnFutexKey, this);
+                m_waitingOnFutexKey = 0;
+            }
+            setState(ProcState::READY);
+            Scheduler::put(this);
         }
         t = t->m_nextThread;
     }

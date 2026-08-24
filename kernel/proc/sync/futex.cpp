@@ -27,7 +27,8 @@ FutexQueue* Futex::getQueue(uint64_t physKey) {
         return s_table->at(physKey);
 
     auto* q = new FutexQueue();
-    q->waiters = new ProcList();
+    q->waitersHead = nullptr;
+    q->waitersTail = nullptr;
     q->refCount = 0;
     s_table->insert(physKey, q);
     return q;
@@ -37,12 +38,12 @@ void Futex::tryFreeQueue(uint64_t physKey) {
     if (!s_table || !s_table->contains(physKey)) return;
 
     FutexQueue* q = s_table->at(physKey);
-    if (q->refCount == 0 && q->waiters->empty()) {
+    if (q->refCount == 0 && q->empty()) {
         s_table->erase(physKey);
-        delete q->waiters;
         delete q;
     }
 }
+
 
 int64_t Futex::wait(uint64_t physKey, uint32_t* uaddr, uint32_t val, time_t timeout) {
     s_lock.acquire();
@@ -60,8 +61,9 @@ int64_t Futex::wait(uint64_t physKey, uint32_t* uaddr, uint32_t val, time_t time
     q->refCount++;
 
     PCB* me = PCB::running();
+    me->m_waitingOnFutexKey = physKey;
     me->setState(ProcState::BLOCKED);
-    q->waiters->put(me);
+    q->push(me);
 
     s_lock.release();
 
@@ -71,6 +73,8 @@ int64_t Futex::wait(uint64_t physKey, uint32_t* uaddr, uint32_t val, time_t time
     }
 
     PCB::yield();
+
+    me->m_waitingOnFutexKey = 0;
 
     s_lock.acquire();
     q->refCount--;
@@ -100,7 +104,7 @@ int64_t Futex::wake(uint64_t physKey, uint32_t count) {
     int64_t woken = 0;
 
     while (woken < (int64_t)count) {
-        PCB* pcb = q->waiters->get();
+        PCB* pcb = q->pop();
         if (!pcb) break;
 
         if (pcb->state() == ProcState::SLEEPING)
@@ -134,4 +138,24 @@ int64_t Futex::syscall(uint32_t* uaddr, int op, uint32_t val, time_t timeout) {
     default:
         return FUTEX_EINVAL;
     }
+}
+
+void Futex::forceRemove(uint64_t physKey, PCB* pcb) {
+    s_lock.acquire();
+    if (s_table && s_table->contains(physKey)) {
+        FutexQueue* q = s_table->at(physKey);
+        if (q->waitersHead == pcb) {
+            q->waitersHead = pcb->m_futexNext;
+            if (!q->waitersHead) q->waitersTail = nullptr;
+        } else {
+            PCB* cur = q->waitersHead;
+            while (cur && cur->m_futexNext != pcb) cur = cur->m_futexNext;
+            if (cur) {
+                cur->m_futexNext = pcb->m_futexNext;
+                if (q->waitersTail == pcb) q->waitersTail = cur;
+            }
+        }
+        pcb->m_futexNext = nullptr;
+    }
+    s_lock.release();
 }

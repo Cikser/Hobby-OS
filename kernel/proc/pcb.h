@@ -71,6 +71,8 @@ protected:
     friend class SignalHandler;
     friend class SyscallHandler;
     friend class Semaphore;
+    friend class FutexQueue;
+    friend class Futex;
 
     static constexpr time_t DEFAULT_TIME_SLICE = 2;
 
@@ -92,7 +94,9 @@ protected:
     PCB* m_next;
     PCB* m_nextSleep;
     PCB* m_semNext;
+    PCB* m_futexNext;
     Semaphore* m_waitingOn;
+    uint64_t m_waitingOnFutexKey;
     time_t m_relativeSleepTime;
     time_t m_timeSlice;
     bool m_usermode;

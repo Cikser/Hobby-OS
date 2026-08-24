@@ -618,13 +618,16 @@ uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
 
     char* targetPathPtr = nullptr;
 
-    if (path.path[0] != '/' && dirfd == -100) {
-        const char* cwd = PCB::runningProcess()->cwd();
-        targetPathPtr = path_combine(cwd, path.path);
-        MemoryAllocator::kfree((void*)cwd);
-    } 
+    if (path.path[0] == '/') {
+        targetPathPtr = kstrdup(path.path, PATH_MAX);
+    }
+    else if (dirfd == -100) {
+        Process* proc = PCB::runningProcess();
+        if (!proc) return (uint64_t)-LINUX_EFAULT;
+        targetPathPtr = proc->resolveRelative(path.path);
+    }
     else {
-        targetPathPtr = kstrdup(path.path);
+        return (uint64_t)-LINUX_ENOENT;
     }
 
     AutoPath fullPath(targetPathPtr);

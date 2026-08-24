@@ -614,10 +614,10 @@ uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
     uint32_t flags = tf->a2;
 
     AutoPath path(copyPathFromUser(buf));
-    if (!path.valid()) return -1;
+    if (!path.valid()) return (uint64_t)-LINUX_EFAULT;
 
     int ret = VFS::unlink(path, flags);
-    return ret;
+    return (ret == 0) ? 0 : (uint64_t)-LINUX_ENOENT;
 }
 
 uint64_t SyscallHandler::sys_futex(TrapFrame* tf) {
@@ -878,6 +878,7 @@ static constexpr int F_GETFD = 1;
 static constexpr int F_SETFD = 2;
 static constexpr int F_GETFL = 3;
 static constexpr int F_SETFL = 4;
+static constexpr int F_DUPFD_CLOEXEC = 1030;
 static constexpr int FD_CLOEXEC = 1;
 static constexpr int O_NONBLOCK = 0x800;
 
@@ -902,10 +903,12 @@ uint64_t SyscallHandler::sys_fcntl(TrapFrame* tf) {
         case F_SETFL:
             return 0;
 
-        case F_DUPFD: {
+        case F_DUPFD:
+        case F_DUPFD_CLOEXEC: {
             File* copy = new File(*file, true);
             if (!copy) return (uint64_t)-1;
-            int newfd = PCB::runningProcess()->m_fdTable->alloc(copy);
+            
+            int newfd = PCB::runningProcess()->m_fdTable->alloc(copy, arg);
             if (newfd < 0) {
                 copy->close();
                 delete copy;
@@ -915,7 +918,7 @@ uint64_t SyscallHandler::sys_fcntl(TrapFrame* tf) {
         }
 
         default:
-            return 0;
+            return (uint64_t)-1;
     }
 }
 
@@ -1648,5 +1651,21 @@ uint64_t SyscallHandler::sys_symlinkat(TrapFrame* tf) {
 }
 
 uint64_t SyscallHandler::sys_utimensat(TrapFrame* tf) {
+    int dirfd = (int)(int64_t)tf->a0;
+    uint64_t pathAddr = tf->a1;
+
+    if (!pathAddr) {
+        return 0;
+    }
+
+    AutoPath path(copyPathFromUser(pathAddr));
+    if (!path.valid()) return (uint64_t)-14; // EFAULT
+
+    VfsInode* inode = VFS::resolvePath(path);
+    if (!inode) return (uint64_t)-2; // ENOENT
+
+    uint32_t num = inode->inodeNum();
+    VFS::putInode(inode, num);
+
     return 0;
 }

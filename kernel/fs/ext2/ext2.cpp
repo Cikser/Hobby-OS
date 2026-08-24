@@ -274,9 +274,8 @@ int Ext2Mount::addDirEntry(Ext2Inode* dir, uint32_t inodeNum, const char* name, 
     memcpy(newEntry->name, name, nameLen);
     writeBlock(newPhysical, buf.buf);
 
-    Ext2InodeDisk raw = readRawInode(dir->inodeNum());
-    raw.i_size += blockSize;
-    writeRawInode(dir->inodeNum(), raw);
+    dir->m_raw.i_size += blockSize;
+    writeRawInode(dir->inodeNum(), dir->m_raw);
     return 0;
 }
 
@@ -420,9 +419,8 @@ int Ext2Mount::mkdir(VfsInode* parent, const char* path) {
         return -1;
     }
 
-    Ext2InodeDisk parentRaw = readRawInode(dir->inodeNum());
-    parentRaw.i_links_count++;
-    writeRawInode(dir->inodeNum(), parentRaw);
+    dir->m_raw.i_links_count++;
+    writeRawInode(dir->inodeNum(), dir->m_raw);
     return 0;
 }
 

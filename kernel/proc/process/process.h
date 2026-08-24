@@ -65,7 +65,13 @@ public:
     bool checkOperation(uint64_t addr, uint64_t len, uint32_t op) const {
         if (addr > addr + len) return false;
         if (m_segTable->checkOperation(addr, addr + len, op)) return true;
-        return m_mmap->checkOperation(addr, addr + len, op);
+
+        uint32_t mmapOp = 0;
+        if (op & SegmentDesc::SEG_R) mmapOp |= MMAP_PROT_READ;
+        if (op & SegmentDesc::SEG_W) mmapOp |= MMAP_PROT_WRITE;
+        if (op & SegmentDesc::SEG_X) mmapOp |= MMAP_PROT_EXEC;
+
+        return m_mmap->checkOperation(addr, addr + len, mmapOp);
     }
 
     pid_t pgid() const { return m_pgid; }

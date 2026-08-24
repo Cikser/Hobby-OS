@@ -37,9 +37,9 @@ void FdTable::release() {
     }
 }
 
-int FdTable::alloc(File* file) {
+int FdTable::alloc(File* file, int min) {
     m_lock.acquire();
-    for (int i = 0; i < MAX_FDS; i++) {
+    for (int i = min; i < MAX_FDS; i++) {
         if (!m_fds[i]) {
             m_fds[i] = file;
             m_lock.release();

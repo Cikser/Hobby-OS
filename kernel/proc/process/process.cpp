@@ -66,9 +66,9 @@ Process::Process(PMT* pmt, uint64_t entry, Process* parent, FdTable* fdTable) :
         m_fdTable = new FdTable();
         TTYInode* terminal = new TTYInode();
         terminal->setForegroundPgid(m_pgid);
-        m_fdTable->alloc(new File(terminal, nullptr, File::O_RDONLY));
-        m_fdTable->alloc(new File(terminal, nullptr, File::O_WRONLY));
-        m_fdTable->alloc(new File(terminal, nullptr, File::O_WRONLY));
+        m_fdTable->alloc(new File(terminal, nullptr, File::O_RDWR));
+        m_fdTable->alloc(new File(terminal, nullptr, File::O_RDWR));
+        m_fdTable->alloc(new File(terminal, nullptr, File::O_RDWR));
 
         m_mmap = new Mmap(m_pmt, m_segTable);
         m_signalHandler = new SignalHandler();

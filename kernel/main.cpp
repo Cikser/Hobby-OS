@@ -7,6 +7,7 @@
 #include "proc/thread/thread.h"
 #include "io/console/console.h"
 #include "io/disk/block_cache.h"
+#include "fs/path_cache.h"
 
 void printPid(void* arg) {
 	Console::kprintf("Printing pid: %ld\n", PCB::currentPid());
@@ -16,6 +17,10 @@ void printSleep(void* arg) {
 	Console::kprintf("Sleeping pid: %ld\n", PCB::currentPid());
 	PCB::sleep(1000);
 	Console::kprintf("Finished sleeping pid: %ld\n", PCB::currentPid());
+}
+
+void flushWrapper(void*) {
+	BlockCache::flush();
 }
 
 int main() {
@@ -31,6 +36,8 @@ int main() {
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
 
 	while (initProc->state() != ProcState::ZOMBIE);
+	
+	RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
 	BlockCache::flush();
 	Console::kprintf("back in main\n");
 

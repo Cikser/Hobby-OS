@@ -97,20 +97,23 @@ void Thread::exit(int exitCode) {
     while (m_waitSem.waiting()) {
         m_waitSem.signal();
     }
-    Thread* cur = m_parent->m_threads, *prev = nullptr;
-    while (cur && cur != this) {
-        prev = cur;
-        cur = cur->m_nextThread;
-    }
-    if (cur == this) {
-        if (!prev) {
-            m_parent->m_threads = m_parent->m_threads->m_nextThread;
+    if (m_parent) {
+        Thread* cur = m_parent->m_threads, *prev = nullptr;
+        while (cur && cur != this) {
+            prev = cur;
+            cur = cur->m_nextThread;
         }
-        else {
-            prev->m_nextThread = m_nextThread;
+        if (cur == this) {
+            if (!prev) {
+                m_parent->m_threads = m_parent->m_threads->m_nextThread;
+            }
+            else {
+                prev->m_nextThread = m_nextThread;
+            }
+            m_nextThread = nullptr;
         }
-        m_nextThread = nullptr;
     }
+    
     m_state = ProcState::ZOMBIE;
     clear();
     PCBGarbage::put(this);

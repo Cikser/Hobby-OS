@@ -83,6 +83,10 @@ void Disk::enableInterruptMode() {
     m_interruptMode = true;
 }
 
+void Disk::disableInterruptMode() {
+    m_interruptMode = false;
+}
+
 int Disk::allocSlot() {
     m_allocSem->wait();
     m_lock.acquire();
@@ -192,11 +196,14 @@ void Disk::read(uint64_t sector, void* buf) {
     sendRequest(sector, buf, READ);
 }
 
-void Disk::write(uint64_t sector, void* buf) {
-    void* cached = BlockCache::lookup(sector);
-    if (cached) {
-        memcpy(cached, buf, SECTOR_SIZE);
-        return;
+void Disk::write(uint64_t sector, void* buf, bool force) {
+    if (!force) {
+        void* cached = BlockCache::lookup(sector);
+        if (cached) {
+            memcpy(cached, buf, SECTOR_SIZE);
+            BlockCache::markDirty(sector);
+            return;
+        }
     }
     sendRequest(sector, buf, WRITE);
 }

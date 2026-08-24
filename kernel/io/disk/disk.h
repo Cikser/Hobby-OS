@@ -12,10 +12,11 @@ public:
     static void init();
 
     static void read(uint64_t sector, void* buf);
-    static void write(uint64_t sector, void* buf);
+    static void write(uint64_t sector, void* buf, bool force = true);
 
     static void interruptHandler();
     static void enableInterruptMode();
+    static void disableInterruptMode();
 
     static constexpr uint32_t SECTOR_SIZE = 512;
 

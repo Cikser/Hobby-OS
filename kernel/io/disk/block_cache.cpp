@@ -5,6 +5,9 @@ LRUCache<uint64_t, CachedBlock*>* BlockCache::s_cache = nullptr;
 Lock BlockCache::s_lock;
 
 static void freeCachedBlock(const uint64_t& key, CachedBlock*& block) {
+    if (block->dirty) {
+        Disk::write(block->sectorNum, block->data, true);
+    }
     delete block;
 }
 
@@ -78,4 +81,8 @@ void BlockCache::flush() {
     s_cache = nullptr;
 
     s_lock.release();
+}
+
+void BlockCache::markDirty(uint64_t sectorNum) {
+    s_cache->at(sectorNum)->dirty = true;
 }

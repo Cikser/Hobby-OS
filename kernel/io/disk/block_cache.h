@@ -9,6 +9,7 @@
 struct CachedBlock {
     uint64_t sectorNum;
     uint8_t data[Disk::SECTOR_SIZE];
+    bool dirty;
 
     void* operator new(size_t size) {
         if (!s_cache)
@@ -25,6 +26,7 @@ class BlockCache {
 public:
     static void* lookup(uint64_t sectorNum);
     static void* insert(uint64_t sectorNum, const void* data);
+    static void markDirty(uint64_t sectorNum);
     static void invalidate(uint64_t sectorNum);
     static void flush();
 

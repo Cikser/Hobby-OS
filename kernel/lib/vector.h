@@ -146,6 +146,15 @@ public:
         m_size = 0;
     }
 
+    void reset(POINTER_TYPE newData, uint64_t newCap) {
+        if (m_data) {
+            MemoryAllocator::kfree(m_data);
+        }
+        m_data = newData;
+        m_capacity = newCap;
+        m_size = newCap;
+    }
+
     CONST_REFERENCE_TYPE front() const {
         if (m_size == 0) {
             Console::panic("Vector::front(): vector is empty");

@@ -272,8 +272,9 @@ private:
 
     void rehash() {
         uint64_t newCapacity = m_capacity * 2;
-        Vector<HashMapEntry*> newEntries(newCapacity);
-        newEntries.fill(0);
+        
+        auto** newTable = (HashMapEntry**)MemoryAllocator::kmalloc(newCapacity * sizeof(HashMapEntry*));
+        memset(newTable, 0, newCapacity * sizeof(HashMapEntry*));
 
         for (uint64_t i = 0; i < m_capacity; i++) {
             HashMapEntry* entry = m_entries[i];
@@ -281,15 +282,14 @@ private:
                 HashMapEntry* next = entry->next;
 
                 uint64_t newIndex = hashKey(entry->key, newCapacity);
-                entry->next = newEntries[newIndex];
-                newEntries[newIndex] = entry;
+                entry->next = newTable[newIndex];
+                newTable[newIndex] = entry;
 
                 entry = next;
             }
-            m_entries[i] = nullptr;
         }
 
-        m_entries = static_cast<Vector<HashMapEntry*>&&>(newEntries);
+        m_entries.reset(newTable, newCapacity);
         m_capacity = newCapacity;
     }
 

@@ -16,12 +16,18 @@ void Console::kputs(const char* s){
 }
 
 char Console::kgetc(){
-    sem()->wait();
-    m_lock.acquire();
-    char c = m_buffer[m_head];
-    m_head = (m_head + 1) % BUFFER_SIZE;
-    m_lock.release();
-    return c;
+    while (true) {
+        sem()->wait();
+        m_lock.acquire();
+        if (m_head == m_tail) {
+            m_lock.release();
+            continue;
+        }
+        char c = m_buffer[m_head];
+        m_head = (m_head + 1) % BUFFER_SIZE;
+        m_lock.release();
+        return c;
+    }
 }
 
 void Console::interruptHandler() {

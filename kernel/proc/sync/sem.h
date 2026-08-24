@@ -7,8 +7,8 @@
 
 class Semaphore {
 public:
-    explicit Semaphore(uint32_t value = 1) : m_value(value), m_blocked(new ProcList) {}
-    ~Semaphore();
+    explicit Semaphore(uint32_t value = 1) : m_value(value), m_blockedHead(nullptr), m_blockedTail(nullptr) {}
+    ~Semaphore() = default;
 
     void* operator new(size_t size) {
         if (!s_cache) {
@@ -24,23 +24,29 @@ public:
     void signal();
     void wait();
 
+    void forceRemove(PCB* pcb);
+
     bool value() const { return m_value; }
-    bool waiting() const { return !m_blocked->empty(); }
+    bool waiting() const { return m_blockedHead != nullptr; }
 
     static void signalWaitAtomic(Semaphore* toSignal, Semaphore* toWait);
 
 private:
     void block();
-    void unblock() const;
+    void unblock();
 
     void signalUnlocked();
     void waitUnlocked();
+
+    void pushBlocked(PCB* pcb);
+    PCB* popBlocked();
 
     static KMemCache<Semaphore>* s_cache;
     static Lock s_lock;
 
     uint32_t m_value;
-    ProcList* m_blocked;
+    PCB* m_blockedHead;
+    PCB* m_blockedTail;
     Lock m_lock;
 };
 

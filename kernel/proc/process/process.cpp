@@ -430,12 +430,18 @@ void Process::exit(int exitCode) {
     while (child) {
         Process* next = child->m_nextSibling;
         child->m_parent = s_init;
-        s_init->m_lock.acquire();
-        child->m_nextSibling = Process::s_init->m_firstChild;
+
+        if (s_init != this) {
+            s_init->m_lock.acquire();
+        }
+        child->m_nextSibling = s_init->m_firstChild;
         s_init->m_firstChild = child;
         if (child->m_state == ProcState::ZOMBIE)
             s_init->m_selfSem.signal();
-        s_init->m_lock.release();
+        if (s_init != this) {
+            s_init->m_lock.release();
+        }
+
         child = next;
     }
     m_firstChild = nullptr;
@@ -749,12 +755,20 @@ int Process::kill(int signum) {
 
     m_lock.acquire();
     if (m_state == ProcState::SLEEPING || m_state == ProcState::BLOCKED) {
+        if (m_waitingOn) {
+            m_waitingOn->forceRemove(this);
+            m_waitingOn = nullptr;
+        }
         setState(ProcState::READY);
         Scheduler::put(this);
     }
     Thread* t = m_threads;
     while (t) {
         if (t->m_state == ProcState::SLEEPING || t->m_state == ProcState::BLOCKED) {
+            if (t->m_waitingOn) {
+                t->m_waitingOn->forceRemove(t);
+                t->m_waitingOn = nullptr;
+            }
             t->setState(ProcState::READY);
             Scheduler::put(t);
         }

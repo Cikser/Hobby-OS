@@ -5,9 +5,29 @@
 KMemCache<Semaphore>* Semaphore::s_cache = nullptr;
 Lock Semaphore::s_lock = Lock();
 
+void Semaphore::pushBlocked(PCB* pcb) {
+    pcb->m_semNext = nullptr;
+    if (!m_blockedTail) {
+        m_blockedHead = m_blockedTail = pcb;
+    } else {
+        m_blockedTail->m_semNext = pcb;
+        m_blockedTail = pcb;
+    }
+}
+
+PCB* Semaphore::popBlocked() {
+    if (!m_blockedHead) return nullptr;
+    PCB* pcb = m_blockedHead;
+    m_blockedHead = m_blockedHead->m_semNext;
+    if (!m_blockedHead) m_blockedTail = nullptr;
+    pcb->m_semNext = nullptr;
+    pcb->m_waitingOn = nullptr;
+    return pcb;
+}
+
 void Semaphore::signal() {
     m_lock.acquire();
-    if (m_blocked->empty()) {
+    if (!m_blockedHead) {
         m_value++;
     }
     else {
@@ -30,19 +50,17 @@ void Semaphore::wait() {
 void Semaphore::block() {
     PCB* running = PCB::running();
     running->setState(ProcState::BLOCKED);
-    m_blocked->put(running);
+    running->m_waitingOn = this;
+    pushBlocked(running);
     m_lock.release();
     PCB::yield();
+    running->m_waitingOn = nullptr;
 }
 
-void Semaphore::unblock() const {
-    PCB* proc = m_blocked->get();
+void Semaphore::unblock() {
+    PCB* proc = popBlocked();
     proc->setState(ProcState::READY);
     Scheduler::put(proc);
-}
-
-Semaphore::~Semaphore() {
-    delete m_blocked;
 }
 
 void Semaphore::signalWaitAtomic(Semaphore* toSignal, Semaphore* toWait) {
@@ -52,7 +70,7 @@ void Semaphore::signalWaitAtomic(Semaphore* toSignal, Semaphore* toWait) {
     if (toWait->m_value == 0) {
         PCB* running = PCB::running();
         running->setState(ProcState::BLOCKED);
-        toWait->m_blocked->put(running);
+        toWait->pushBlocked(running);
         toWait->m_lock.release();
         s_lock.release();
         PCB::yield();
@@ -64,7 +82,7 @@ void Semaphore::signalWaitAtomic(Semaphore* toSignal, Semaphore* toWait) {
 }
 
 void Semaphore::signalUnlocked() {
-    if (m_blocked->empty()) {
+    if (!m_blockedHead) {
         m_value++;
     }
     else {
@@ -76,10 +94,26 @@ void Semaphore::waitUnlocked() {
     if (m_value == 0) {
         PCB* running = PCB::running();
         running->setState(ProcState::BLOCKED);
-        m_blocked->put(running);
+        pushBlocked(running);
         PCB::yield();
     }
     else {
         m_value--;
+    }
+}
+
+void Semaphore::forceRemove(PCB* pcb) {
+    if (m_blockedHead == pcb) {
+        m_blockedHead = pcb->m_semNext;
+        if (!m_blockedHead) m_blockedTail = nullptr;
+        pcb->m_semNext = nullptr;
+        return;
+    }
+    PCB* cur = m_blockedHead;
+    while (cur && cur->m_semNext != pcb) cur = cur->m_semNext;
+    if (cur) {
+        cur->m_semNext = pcb->m_semNext;
+        if (m_blockedTail == pcb) m_blockedTail = cur;
+        pcb->m_semNext = nullptr;
     }
 }

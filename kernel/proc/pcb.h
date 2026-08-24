@@ -70,6 +70,7 @@ protected:
     friend class PCBGarbage;
     friend class SignalHandler;
     friend class SyscallHandler;
+    friend class Semaphore;
 
     static constexpr time_t DEFAULT_TIME_SLICE = 2;
 
@@ -90,6 +91,8 @@ protected:
     PMT* m_pmt;
     PCB* m_next;
     PCB* m_nextSleep;
+    PCB* m_semNext;
+    Semaphore* m_waitingOn;
     time_t m_relativeSleepTime;
     time_t m_timeSlice;
     bool m_usermode;

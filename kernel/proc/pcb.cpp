@@ -14,6 +14,8 @@ PCB::PCB(uint64_t entry, PMT* pmt, bool usermode) :
     m_pmt(pmt),
     m_next(nullptr),
     m_nextSleep(nullptr),
+    m_semNext(nullptr),
+    m_waitingOn(nullptr),
     m_relativeSleepTime(0),
     m_timeSlice(DEFAULT_TIME_SLICE),
     m_usermode(usermode),

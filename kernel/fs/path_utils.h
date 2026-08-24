@@ -48,4 +48,36 @@ struct AutoPath {
     bool valid() const { return path != nullptr; }
 };
 
+
+inline char* path_combine(const char* base, const char* relative, uint64_t maxLen = PATH_MAX) {
+    if (!base && !relative) return nullptr;
+    if (!base || base[0] == '\0') return kstrdup(relative, maxLen);
+    if (!relative || relative[0] == '\0') return kstrdup(base, maxLen);
+
+    if (relative[0] == '/') {
+        return kstrdup(relative, maxLen);
+    }
+
+    uint64_t baseLen = strlen(base);
+    uint64_t relLen  = strlen(relative);
+
+    bool needsSlash = (base[baseLen - 1] != '/');
+    uint64_t totalLen = baseLen + (needsSlash ? 1 : 0) + relLen;
+
+    if (totalLen > maxLen) return nullptr;
+
+    char* dst = (char*)MemoryAllocator::kmalloc(totalLen + 1);
+    if (!dst) return nullptr;
+
+    memcpy(dst, base, baseLen);
+    uint64_t offset = baseLen;
+
+    if (needsSlash) {
+        dst[offset++] = '/';
+    }
+
+    memcpy(dst + offset, relative, relLen + 1);
+
+    return dst;
+}
 #endif

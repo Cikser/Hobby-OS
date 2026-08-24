@@ -611,12 +611,26 @@ uint64_t SyscallHandler::sys_lseek(TrapFrame* tf) {
 uint64_t SyscallHandler::sys_unlinkat(TrapFrame* tf) {
     int dirfd = (int)(int64_t)tf->a0;
     uint64_t buf = tf->a1;
-    uint32_t flags = tf->a2;
+    uint32_t flags = (uint32_t)tf->a2;
 
     AutoPath path(copyPathFromUser(buf));
     if (!path.valid()) return (uint64_t)-LINUX_EFAULT;
 
-    int ret = VFS::unlink(path, flags);
+    char* targetPathPtr = nullptr;
+
+    if (path.path[0] != '/' && dirfd == -100) {
+        const char* cwd = PCB::runningProcess()->cwd();
+        targetPathPtr = path_combine(cwd, path.path);
+        MemoryAllocator::kfree((void*)cwd);
+    } 
+    else {
+        targetPathPtr = kstrdup(path.path);
+    }
+
+    AutoPath fullPath(targetPathPtr);
+    if (!fullPath.valid()) return (uint64_t)-LINUX_EFAULT;
+
+    int ret = VFS::unlink(fullPath, flags);
     return (ret == 0) ? 0 : (uint64_t)-LINUX_ENOENT;
 }
 

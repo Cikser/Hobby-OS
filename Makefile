@@ -57,8 +57,7 @@ $(TARGET): $(OBJS)
 disasm: $(TARGET)
 	@$(OBJDUMP) -d $< > $(DISASM_FILE)
 
-BUSYBOX_CMDS := ls cat echo mkdir rm touch pwd true false
-
+BUSYBOX_CMDS := ls cat echo mkdir rm rmdir touch pwd true false cp mv stat chmod kill sleep time grep head tail wc sort uniq tr cut cmp ln readlink tee xargs
 $(DISK_IMG): user/init.elf user/hello_musl.elf user/shell.elf
 	@echo "Creating disk image: $(DISK_IMG) ($(DISK_SIZE_MB) MB)"
 	@rm -rf $(BUILD_DIR)/kfs_root

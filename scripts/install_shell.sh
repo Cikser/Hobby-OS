@@ -22,14 +22,11 @@ fi
 
 cd "$SHELL_DIR"
 
-# Čist start - eliminisi bilo kakvo zaostalo stanje iz prethodnih pokušaja
 rm -f .config .config.old
 
-# 1. Minimalna, potpuno prazna baza - NIŠTA nije uključeno.
 echo "==> Generating allnoconfig baseline (nothing enabled)..."
 make ARCH=riscv CROSS_COMPILE="riscv64-linux-musl-" allnoconfig
 
-# 2. Omogući potrebne opcije upisivanjem u .config
 echo "==> Enabling required applets..."
 
 ENABLE_SYMS="
@@ -52,22 +49,36 @@ CONFIG_TRUE
 CONFIG_FALSE
 CONFIG_CP
 CONFIG_MV
+CONFIG_STAT
+CONFIG_CHMOD
+CONFIG_KILL
+CONFIG_SLEEP
+CONFIG_TIME
+CONFIG_GREP
+CONFIG_HEAD
+CONFIG_TAIL
+CONFIG_WC
+CONFIG_SORT
+CONFIG_UNIQ
+CONFIG_TR
+CONFIG_CUT
+CONFIG_CMP
+CONFIG_LN
+CONFIG_READLINK
+CONFIG_TEE
+CONFIG_XARGS
 CONFIG_INSTALL_APPLET_SYMLINKS
 "
 
 for sym in $ENABLE_SYMS; do
-  # Ukloni postojeci zapis ako ga ima (npr. # CONFIG_FOO is not set) i postavi na =y
   sed -i "/^# ${sym} is not set/d" .config
   sed -i "/^${sym}=/d" .config
   echo "${sym}=y" >> .config
 done
 
-# 3. Propusti kroz oldconfig kako bi Kconfig rešio sve zavisnosti
-#    i dopunio nedostajuća simbolička polja podrazumevanim vrednostima.
 echo "==> Resolving dependencies..."
 yes "" | make ARCH=riscv CROSS_COMPILE="riscv64-linux-musl-" oldconfig > /dev/null
 
-# 4. Pozitivna verifikacija pre kompilacije.
 echo "==> Verifying required applets are enabled..."
 REQUIRED_SYMS="CONFIG_STATIC CONFIG_ASH CONFIG_ECHO CONFIG_CAT CONFIG_LS CONFIG_MKDIR CONFIG_TOUCH CONFIG_PWD CONFIG_TRUE CONFIG_FALSE CONFIG_RM CONFIG_CP CONFIG_MV"
 MISSING=0
@@ -85,7 +96,6 @@ if [ "$MISSING" -ne 0 ]; then
 fi
 echo "==> All required applets confirmed enabled."
 
-# 5. Kompajliraj
 echo "==> Compiling BusyBox statically (no-PIE)..."
 make ARCH=riscv CROSS_COMPILE="riscv64-linux-musl-" \
      CFLAGS="-march=rv64gc -mabi=lp64d -fno-pie -fno-PIC" \
@@ -93,8 +103,6 @@ make ARCH=riscv CROSS_COMPILE="riscv64-linux-musl-" \
      CONFIG_EXTRA_LDFLAGS="-static -no-pie" \
      -j"$(nproc)"
 
-# 6. Preferiraj nestripovanu verziju (uvek generisana kao
-#    međukorak, nezavisno od strip-a finalnog binary-ja).
 if [ -f "busybox_unstripped" ]; then
   cp busybox_unstripped "$TARGET_DIR/shell"
   echo "==> Build successful! Unstripped binary located at: $TARGET_DIR/shell"

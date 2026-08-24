@@ -31,6 +31,9 @@ class List {
         inline static KMemCache<Node>* s_nodeCache = nullptr;
     };
 
+    template<typename K, typename V>
+    friend class LRUCache;
+
     class Iterator {
     public:
         explicit Iterator(Node* node) : m_node(node) {}
@@ -39,8 +42,8 @@ class List {
             return m_node->value;
         }
 
-        REFERENCE_TYPE operator->() const {
-            return m_node->value;
+        POINTER_TYPE operator->() const {
+            return &m_node->value;
         }
 
         Iterator& operator++() {
@@ -182,6 +185,57 @@ public:
         VALUE_TYPE ret = node->value;
         delete node;
         return ret;
+    }
+
+    REFERENCE_TYPE first() {
+        return m_head->value;
+    }
+
+    REFERENCE_TYPE back() {
+        return m_tail->value;
+    }
+
+    void clear() {
+        auto it = m_head;
+        while (it) {
+            auto toDelete = it;
+            it = it->next;
+            delete toDelete;
+        }
+        m_head = nullptr;
+        m_tail = nullptr;
+        m_size = 0;
+    }
+
+    void moveFront(ITERATOR_TYPE it) {
+        Node* node = it.m_node;
+
+        if (!node || node == m_head) {
+            return;
+        }
+
+        if (node->prev) {
+            node->prev->next = node->next;
+        }
+        if (node->next) {
+            node->next->prev = node->prev;
+        }
+        if (node == m_tail) {
+            m_tail = node->prev;
+        }
+
+        node->next = m_head;
+        node->prev = nullptr;
+
+        if (m_head) {
+            m_head->prev = node;
+        }
+
+        m_head = node;
+
+        if (!m_tail) {
+            m_tail = m_head;
+        }
     }
 
 private:

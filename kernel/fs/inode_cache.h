@@ -2,7 +2,7 @@
 #define HOBBY_OS_INODE_CACHE_H
 
 #include "../types.h"
-#include "../lib/hash_map.h"
+#include "../lib/lru_cache.h"
 #include "../mm/kalloc/kmem_cache.h"
 #include "../proc/sync/lock.h"
 #include "vfs_inode.h"
@@ -34,7 +34,7 @@ public:
     static void flush();
 
 private:
-    static HashMap<uint32_t, CachedInode*>* s_map;
+    static LRUCache<uint32_t, CachedInode*>* s_cache;
     static Lock s_lock;
 
     static uint32_t makeKey(VfsMount* mount, uint32_t inodeNum);

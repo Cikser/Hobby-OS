@@ -2,7 +2,7 @@
 #define RISC_V_PATH_CACHE_H
 
 #include "../types.h"
-#include "../lib/hash_map.h"
+#include "../lib/lru_cache.h"
 #include "../mm/kalloc/kmem_cache.h"
 #include "../proc/sync/lock.h"
 
@@ -25,9 +25,10 @@ public:
     static void insert(const char* path, uint32_t inodeNum);
     static void invalidate(const char* path);
     static void invalidatePrefix(const char* prefix);
+    static void flush();
 
 private:
-    static HashMap<const char*, PathEntry*>* s_map;
+    static LRUCache<const char*, PathEntry*>* s_cache;
     static Lock s_lock;
 };
 

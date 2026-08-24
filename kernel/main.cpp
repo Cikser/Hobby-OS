@@ -6,6 +6,7 @@
 #include "proc/process/process.h"
 #include "proc/thread/thread.h"
 #include "io/console/console.h"
+#include "io/disk/block_cache.h"
 
 void printPid(void* arg) {
 	Console::kprintf("Printing pid: %ld\n", PCB::currentPid());
@@ -30,7 +31,7 @@ int main() {
 	RiscV::ms_sstatus(RiscV::SSTATUS_SPIE);
 
 	while (initProc->state() != ProcState::ZOMBIE);
-
+	BlockCache::flush();
 	Console::kprintf("back in main\n");
 
 	RiscV::stopEmulation();

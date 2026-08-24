@@ -4,7 +4,7 @@
 #include "disk.h"
 #include "../../types.h"
 #include "../../mm/kalloc/kmem_cache.h"
-#include "../../lib/hash_map.h"
+#include "../../lib/lru_cache.h"
 
 struct CachedBlock {
     uint64_t sectorNum;
@@ -29,7 +29,7 @@ public:
     static void flush();
 
 private:
-    static HashMap<uint64_t, CachedBlock*>* s_map;
+    static LRUCache<uint64_t, CachedBlock*>* s_cache;
     static Lock s_lock;
 };
 

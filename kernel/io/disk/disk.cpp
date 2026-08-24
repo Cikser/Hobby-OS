@@ -193,6 +193,10 @@ void Disk::read(uint64_t sector, void* buf) {
 }
 
 void Disk::write(uint64_t sector, void* buf) {
-    BlockCache::invalidate(sector);
+    void* cached = BlockCache::lookup(sector);
+    if (cached) {
+        memcpy(cached, buf, SECTOR_SIZE);
+        return;
+    }
     sendRequest(sector, buf, WRITE);
 }

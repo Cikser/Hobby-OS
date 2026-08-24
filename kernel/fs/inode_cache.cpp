@@ -2,8 +2,19 @@
 #include "../io/console/console.h"
 
 KMemCache<CachedInode>* CachedInode::s_cache = nullptr;
-HashMap<uint32_t, CachedInode*>* InodeCache::s_map = nullptr;
+LRUCache<uint32_t, CachedInode*>* InodeCache::s_cache = nullptr;
 Lock InodeCache::s_lock;
+
+static void freeCachedInode(const uint32_t& key, CachedInode*& ci) {
+    if (ci) {
+        VfsMount* m = ci->mount;
+        VfsInode* in = ci->inode;
+        delete ci;
+        if (m && in) {
+            m->putInode(in);
+        }
+    }
+}
 
 uint32_t InodeCache::makeKey(VfsMount* mount, uint32_t inodeNum) {
     return inodeNum;
@@ -12,18 +23,18 @@ uint32_t InodeCache::makeKey(VfsMount* mount, uint32_t inodeNum) {
 VfsInode* InodeCache::lookup(VfsMount* mount, uint32_t inodeNum) {
     s_lock.acquire();
 
-    if (!s_map) {
+    if (!s_cache) {
         s_lock.release();
         return nullptr;
     }
 
     uint32_t key = makeKey(mount, inodeNum);
-    if (!s_map->contains(key)) {
+    if (!s_cache->contains(key)) {
         s_lock.release();
         return nullptr;
     }
 
-    CachedInode* ci = s_map->at(key);
+    CachedInode* ci = s_cache->at(key);
     ci->refCount++;
     s_lock.release();
     return ci->inode;
@@ -32,13 +43,14 @@ VfsInode* InodeCache::lookup(VfsMount* mount, uint32_t inodeNum) {
 VfsInode* InodeCache::insert(VfsMount* mount, uint32_t inodeNum, VfsInode* inode) {
     s_lock.acquire();
 
-    if (!s_map)
-        s_map = new HashMap<uint32_t, CachedInode*>();
+    if (!s_cache) {
+        s_cache = new LRUCache<uint32_t, CachedInode*>(freeCachedInode);
+    }
 
     uint32_t key = makeKey(mount, inodeNum);
 
-    if (s_map->contains(key)) {
-        CachedInode* existing = s_map->at(key);
+    if (s_cache->contains(key)) {
+        CachedInode* existing = s_cache->at(key);
         existing->refCount++;
         mount->putInode(inode);
         s_lock.release();
@@ -50,7 +62,7 @@ VfsInode* InodeCache::insert(VfsMount* mount, uint32_t inodeNum, VfsInode* inode
     ci->mount = mount;
     ci->inodeNum = inodeNum;
     ci->refCount = 1;
-    s_map->insert(key, ci);
+    s_cache->insert(key, ci);
 
     s_lock.release();
     return inode;
@@ -59,36 +71,36 @@ VfsInode* InodeCache::insert(VfsMount* mount, uint32_t inodeNum, VfsInode* inode
 void InodeCache::acquire(VfsMount* mount, uint32_t inodeNum) {
     s_lock.acquire();
 
-    if (!s_map) {
+    if (!s_cache) {
         s_lock.release();
         Console::panic("InodeCache::acquire(): cache not initialized");
     }
 
     uint32_t key = makeKey(mount, inodeNum);
-    if (!s_map->contains(key)) {
+    if (!s_cache->contains(key)) {
         s_lock.release();
         Console::panic("InodeCache::acquire(): inode not in cache");
     }
 
-    s_map->at(key)->refCount++;
+    s_cache->at(key)->refCount++;
     s_lock.release();
 }
 
 void InodeCache::release(VfsMount* mount, uint32_t inodeNum) {
     s_lock.acquire();
 
-    if (!s_map) {
+    if (!s_cache) {
         s_lock.release();
         return;
     }
 
     uint32_t key = makeKey(mount, inodeNum);
-    if (!s_map->contains(key)) {
+    if (!s_cache->contains(key)) {
         s_lock.release();
         return;
     }
 
-    CachedInode* ci = s_map->at(key);
+    CachedInode* ci = s_cache->at(key);
     if (ci->refCount == 0) {
         s_lock.release();
         Console::panic("InodeCache::release(): refCount already zero");
@@ -98,7 +110,7 @@ void InodeCache::release(VfsMount* mount, uint32_t inodeNum) {
     if (ci->refCount == 0) {
         VfsMount* m  = ci->mount;
         VfsInode* in = ci->inode;
-        s_map->erase(key);
+        s_cache->erase(key);
         delete ci;
         s_lock.release();
         m->putInode(in);
@@ -111,31 +123,31 @@ void InodeCache::release(VfsMount* mount, uint32_t inodeNum) {
 void InodeCache::invalidate(VfsMount* mount, uint32_t inodeNum) {
     s_lock.acquire();
 
-    if (!s_map) {
+    if (!s_cache) {
         s_lock.release();
         return;
     }
 
     uint32_t key = makeKey(mount, inodeNum);
-    if (!s_map->contains(key)) {
+    if (!s_cache->contains(key)) {
         s_lock.release();
         return;
     }
 
-    CachedInode* ci = s_map->at(key);
+    CachedInode* ci = s_cache->at(key);
 
     if (ci->refCount == 0) {
         VfsMount* m  = ci->mount;
         VfsInode* in = ci->inode;
-        s_map->erase(key);
+        s_cache->erase(key);
         delete ci;
         s_lock.release();
         m->putInode(in);
     }
     else {
-        s_map->erase(key);
+        s_cache->erase(key);
         uint32_t ghostKey = key | 0x80000000u;
-        if (s_map->contains(ghostKey)) {
+        if (s_cache->contains(ghostKey)) {
             VfsMount* m  = ci->mount;
             VfsInode* in = ci->inode;
             delete ci;
@@ -143,7 +155,7 @@ void InodeCache::invalidate(VfsMount* mount, uint32_t inodeNum) {
             m->putInode(in);
             return;
         }
-        s_map->insert(ghostKey, ci);
+        s_cache->insert(ghostKey, ci);
         s_lock.release();
     }
 }
@@ -151,22 +163,15 @@ void InodeCache::invalidate(VfsMount* mount, uint32_t inodeNum) {
 void InodeCache::flush() {
     s_lock.acquire();
 
-    if (!s_map) {
+    if (!s_cache) {
         s_lock.release();
         return;
     }
 
-    for (auto [key, ci] : *s_map) {
-        if (ci) {
-            VfsMount* m = ci->mount;
-            VfsInode* in = ci->inode;
-            m->putInode(in);
-            delete ci;
-        }
-    }
+    s_cache->flush();
 
-    delete s_map;
-    s_map = nullptr;
+    delete s_cache;
+    s_cache = nullptr;
 
     s_lock.release();
 }

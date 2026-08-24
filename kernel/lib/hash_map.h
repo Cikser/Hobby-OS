@@ -37,10 +37,21 @@ struct HashTrait<uint64_t> {
 };
 
 template<>
+struct HashTrait<char*> {
+    static uint64_t hash(char* key, uint64_t capacity) {
+        uint64_t h = 5381;
+        while (*key) h = ((h << 5) + h) ^ (unsigned char)*key++;
+        return h % capacity;
+    }
+    static bool eq(char* a, char* b) { return strcmp(a, b) == 0; }
+};
+
+template<>
 struct HashTrait<const char*> {
     static uint64_t hash(const char* key, uint64_t capacity) {
         uint64_t h = 5381;
-        while (*key) h = ((h << 5) + h) ^ (unsigned char)*key++;
+        const unsigned char* p = (const unsigned char*)key;
+        while (*p) h = ((h << 5) + h) ^ *p++;
         return h % capacity;
     }
     static bool eq(const char* a, const char* b) { return strcmp(a, b) == 0; }
@@ -147,14 +158,7 @@ public:
     }
 
     ~HashMap() {
-        for (uint64_t i = 0; i < m_capacity; i++) {
-            HashMapEntry* entry = m_entries[i];
-            while (entry) {
-                HashMapEntry* next = entry->next;
-                delete entry;
-                entry = next;
-            }
-        }
+        clear();
     }
 
     V_CONST_REFERENCE_TYPE at(K_CONST_REFERENCE_TYPE key) const {
@@ -223,7 +227,12 @@ public:
 
     void clear() {
         for (uint64_t i = 0; i < m_capacity; i++) {
-            delete m_entries[i];
+            HashMapEntry* entry = m_entries[i];
+            while (entry) {
+                HashMapEntry* next = entry->next;
+                delete entry;
+                entry = next;
+            }
             m_entries[i] = nullptr;
         }
         m_count = 0;

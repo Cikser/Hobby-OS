@@ -1,18 +1,26 @@
 #include "block_cache.h"
 #include "../../mm/mem.h"
 
-HashMap<uint64_t, CachedBlock*>* BlockCache::s_map = nullptr;
+LRUCache<uint64_t, CachedBlock*>* BlockCache::s_cache = nullptr;
 Lock BlockCache::s_lock;
+
+static void freeCachedBlock(const uint64_t& key, CachedBlock*& block) {
+    delete block;
+}
 
 void* BlockCache::lookup(uint64_t sectorNum) {
     s_lock.acquire();
-
-    if (!s_map || !s_map->contains(sectorNum)) {
+    if (!s_cache) {
         s_lock.release();
         return nullptr;
     }
 
-    CachedBlock* cb = s_map->at(sectorNum);
+    CachedBlock* cb = nullptr;
+    if (!s_cache->get(sectorNum, cb)) {
+        s_lock.release();
+        return nullptr;
+    }
+
     s_lock.release();
     return cb->data;
 }
@@ -20,11 +28,12 @@ void* BlockCache::lookup(uint64_t sectorNum) {
 void* BlockCache::insert(uint64_t sectorNum, const void* data) {
     s_lock.acquire();
 
-    if (!s_map)
-        s_map = new HashMap<uint64_t, CachedBlock*>(1024);
+    if (!s_cache) {
+        s_cache = new LRUCache<uint64_t, CachedBlock*>(freeCachedBlock);
+    }
 
-    if (s_map->contains(sectorNum)) {
-        CachedBlock* cb = s_map->at(sectorNum);
+    if (s_cache->contains(sectorNum)) {
+        CachedBlock* cb = s_cache->at(sectorNum);
         memcpy(cb->data, data, Disk::SECTOR_SIZE);
         s_lock.release();
         return cb->data;
@@ -33,7 +42,8 @@ void* BlockCache::insert(uint64_t sectorNum, const void* data) {
     auto* cb = new CachedBlock();
     cb->sectorNum = sectorNum;
     memcpy(cb->data, data, Disk::SECTOR_SIZE);
-    s_map->insert(sectorNum, cb);
+
+    s_cache->insert(sectorNum, cb);
 
     s_lock.release();
     return cb->data;
@@ -42,35 +52,30 @@ void* BlockCache::insert(uint64_t sectorNum, const void* data) {
 void BlockCache::invalidate(uint64_t sectorNum) {
     s_lock.acquire();
 
-    if (!s_map || !s_map->contains(sectorNum)) {
+    if (!s_cache || !s_cache->contains(sectorNum)) {
         s_lock.release();
         return;
     }
 
-    CachedBlock* cb = s_map->at(sectorNum);
-    s_map->erase(sectorNum);
+    CachedBlock* cb = s_cache->at(sectorNum);
+    s_cache->erase(sectorNum);
     delete cb;
 
     s_lock.release();
 }
 
-
 void BlockCache::flush() {
     s_lock.acquire();
 
-    if (!s_map) {
+    if (!s_cache) {
         s_lock.release();
         return;
     }
 
-    for (auto [sectorNum, cb] : *s_map) {
-        if (cb) {
-            delete cb;
-        }
-    }
+    s_cache->flush();
 
-    delete s_map;
-    s_map = nullptr;
+    delete s_cache;
+    s_cache = nullptr;
 
     s_lock.release();
 }

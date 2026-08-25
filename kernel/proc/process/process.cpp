@@ -218,7 +218,20 @@ Process* Process::createInit(const char* path) {
 
     uint8_t randomBytes[16] = {0};
 
-    uint64_t initialSp = proc->setupInitialStack(path, *info, randomBytes, nullptr, nullptr);
+    char* default_envp[] = {
+        (char*)"PATH=/bin:/usr/bin",
+        (char*)"TERM=vt100",
+        (char*)"HOME=/",
+        (char*)"PWD=/",
+        nullptr
+    };
+
+    char* default_argv[] = {
+        (char*)path,
+        nullptr
+    };
+
+    uint64_t initialSp = proc->setupInitialStack(path, *info, randomBytes, default_argv, default_envp);
 
     proc->m_entry = info->entry;
     proc->m_trapFrame->sepc = info->entry;

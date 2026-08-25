@@ -38,6 +38,7 @@ int main() {
 	while (initProc->state() != ProcState::ZOMBIE);
 	
 	RiscV::mc_sstatus(RiscV::SSTATUS_SIE);
+	Disk::disableInterruptMode();
 	BlockCache::flush();
 	Console::kprintf("back in main\n");
 

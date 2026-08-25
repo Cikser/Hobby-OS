@@ -33,6 +33,7 @@ public:
 private:
     static LRUCache<uint64_t, CachedBlock*>* s_cache;
     static Lock s_lock;
+    static bool s_flushing;
 };
 
 #endif

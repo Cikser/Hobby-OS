@@ -3,6 +3,7 @@
 
 LRUCache<uint64_t, CachedBlock*>* BlockCache::s_cache = nullptr;
 Lock BlockCache::s_lock;
+bool BlockCache::s_flushing = false;
 
 static void freeCachedBlock(const uint64_t& key, CachedBlock*& block) {
     if (block->dirty) {
@@ -29,6 +30,9 @@ void* BlockCache::lookup(uint64_t sectorNum) {
 }
 
 void* BlockCache::insert(uint64_t sectorNum, const void* data) {
+    if (s_flushing) {
+        return nullptr;
+    }
     s_lock.acquire();
 
     if (!s_cache) {
@@ -75,10 +79,13 @@ void BlockCache::flush() {
         return;
     }
 
+    s_flushing = true;
+
     s_cache->flush();
 
     delete s_cache;
     s_cache = nullptr;
+    s_flushing = false;
 
     s_lock.release();
 }

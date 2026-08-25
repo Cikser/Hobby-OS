@@ -12,7 +12,7 @@ public:
     static void init();
 
     static void read(uint64_t sector, void* buf);
-    static void write(uint64_t sector, void* buf, bool force = true);
+    static void write(uint64_t sector, void* buf, bool force = false);
 
     static void interruptHandler();
     static void enableInterruptMode();

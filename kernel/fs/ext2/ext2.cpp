@@ -214,8 +214,8 @@ int Ext2Mount::addDirEntry(Ext2Inode* dir, uint32_t inodeNum, const char* name, 
     for (uint32_t i = 0; dir->readdir(i, &tmp) == 0; i++) {
         if (strcmp(tmp.name, name) == 0) return -1;
     }
+    
     uint8_t nameLen = strlen(name);
-
     uint16_t neededLen = 8 + nameLen;
     if (neededLen % 4) neededLen += 4 - (neededLen % 4);
 
@@ -237,11 +237,13 @@ int Ext2Mount::addDirEntry(Ext2Inode* dir, uint32_t inodeNum, const char* name, 
 
             uint16_t actualLen = 8 + entry->name_len;
             if (actualLen % 4) actualLen += 4 - (actualLen % 4);
-            uint16_t freeSpace = entry->rec_len - actualLen;
-
+            uint16_t freeSpace;
             if (entry->inode == 0) {
                 freeSpace = entry->rec_len;
                 actualLen = 0;
+            } 
+            else {
+                freeSpace = entry->rec_len - actualLen;
             }
 
             if (freeSpace >= neededLen) {
@@ -254,6 +256,7 @@ int Ext2Mount::addDirEntry(Ext2Inode* dir, uint32_t inodeNum, const char* name, 
                 newEntry->name_len = nameLen;
                 newEntry->rec_len = freeSpace;
                 newEntry->file_type = fileType;
+                memset(newEntry->name, 0, freeSpace - 8);
                 memcpy(newEntry->name, name, nameLen);
                 writeBlock(physical, buf.buf);
                 return 0;
@@ -283,11 +286,12 @@ int Ext2Mount::removeDirEntry(Ext2Inode* dir, const char* name) {
     uint32_t blockSize = m_blockSize;
     BlockBuf buf;
     uint64_t fileSize = dir->size();
+    size_t nameLen = strlen(name);
 
     for (uint64_t fileOff = 0; fileOff < fileSize; fileOff += blockSize) {
         uint32_t logical = fileOff / blockSize;
         uint32_t physical = dir->blockMap(logical);
-        if (!physical) return -1;
+        if (!physical) continue;
 
         readBlock(physical, buf.buf);
 
@@ -298,12 +302,15 @@ int Ext2Mount::removeDirEntry(Ext2Inode* dir, const char* name) {
             if (entry->rec_len == 0) break;
 
             if (entry->inode != 0 &&
-                entry->name_len == strlen(name) &&
-                memcmp(entry->name, name, entry->name_len) == 0) {
-                if (prev)
-                    prev->rec_len = entry->rec_len;
-                else
+                entry->name_len == nameLen &&
+                memcmp(entry->name, name, nameLen) == 0) {
+
+                if (prev) {
+                    prev->rec_len += entry->rec_len;
+                } 
+                else {
                     entry->inode = 0;
+                }
                 writeBlock(physical, buf.buf);
                 return 0;
             }
@@ -872,4 +879,42 @@ int Ext2Inode::readlink(char* buf, uint64_t bufsize) {
     uint64_t toCopy = (len < bufsize) ? len : bufsize;
     memcpy(buf, (const char*)m_raw.i_block, toCopy);
     return (int)toCopy;
+}
+
+int Ext2Mount::rename(VfsInode* oldParent, const char* oldName, VfsInode* newParent, const char* newName) {
+    auto srcDir = (Ext2Inode*)oldParent;
+    auto dstDir = (Ext2Inode*)newParent;
+
+    DirEntry entry;
+    bool found = false;
+    for (uint32_t i = 0; srcDir->readdir(i, &entry) == 0; i++) {
+        if (strcmp(entry.name, oldName) == 0) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) return -1;
+
+    DirEntry existing;
+    for (uint32_t i = 0; dstDir->readdir(i, &existing) == 0; i++) {
+        if (strcmp(existing.name, newName) == 0) {
+            if (existing.inodeNum == entry.inodeNum) {
+                return 0;
+            }
+            if (removeDirEntry(dstDir, newName) < 0) return -1;
+            break;
+        }
+    }
+
+    uint8_t fileType = entry.fileType;
+    int addRet = addDirEntry(dstDir, entry.inodeNum, newName, fileType);
+    if (addRet < 0) return -1;
+
+    int removeRet = removeDirEntry(srcDir, oldName);
+    if (removeRet < 0) {
+        removeDirEntry(dstDir, newName);
+        return -1;
+    }
+
+    return 0;
 }

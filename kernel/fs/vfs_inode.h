@@ -62,6 +62,7 @@ public:
     virtual VfsInode* create(VfsInode* parent, const char* path) = 0;
     virtual int unlink(VfsInode* parent, const char* path) = 0;
     virtual VfsInode* symlink(VfsInode* parent, const char* name, const char* target) = 0;
+    virtual int rename(VfsInode* oldParent, const char* oldName, VfsInode* newParent, const char* newName) = 0;
 };
 
 #endif

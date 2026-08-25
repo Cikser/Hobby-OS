@@ -15,6 +15,7 @@
 
 static constexpr int LINUX_EFAULT = 14;
 static constexpr int LINUX_ENOENT = 2;
+static constexpr int LINUX_EBADF = 9;
 
 void SyscallHandler::handle(TrapFrame* tf) {
     switch (tf->a7) {
@@ -87,6 +88,7 @@ void SyscallHandler::handle(TrapFrame* tf) {
     case SYS_SYMLINKAT: tf->a0 = sys_symlinkat(tf); break;
     case SYS_FACCESSAT: tf->a0 = sys_faccessat(tf); break;
     case SYS_UTIMENSAT: tf->a0 = sys_utimensat(tf); break;
+    case SYS_RENAMEAT2: tf->a0 = sys_renameat2(tf); break;
     default:
         Console::kprintf("unknown syscall: %d\n", tf->a7);
         tf->a0 = -38;
@@ -718,9 +720,9 @@ uint64_t SyscallHandler::sys_newfstatat(TrapFrame* tf) {
     auto* statbuf = (InodeStat*)tf->a2;
     int flags = (int)(int64_t)tf->a3;
 
-    if (!statbuf) return (uint64_t)-1;
+    if (!statbuf) return (uint64_t)-LINUX_EFAULT;
     if (!PCB::runningProcess()->checkOperation((uint64_t)statbuf, sizeof(InodeStat), SegmentDesc::SEG_W))
-        return (uint64_t)-1;
+        return (uint64_t)-LINUX_EFAULT;
 
     VfsInode* inode = nullptr;
 
@@ -730,21 +732,21 @@ uint64_t SyscallHandler::sys_newfstatat(TrapFrame* tf) {
         }
         else {
             File* f = PCB::runningProcess()->getFile(dirfd);
-            if (!f) return (uint64_t)-1;
+            if (!f) return (uint64_t)-LINUX_EBADF;
             RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
             int ret = f->fstat(statbuf);
             RiscV::mc_sstatus(RiscV::SSTATUS_SUM);
-            return ret == 0 ? 0 : (uint64_t)-1;
+            return ret == 0 ? 0 : (uint64_t)-LINUX_ENOENT;
         }
     }
     else {
         AutoPath path(copyPathFromUser(pathAddr));
-        if (!path.valid()) return (uint64_t)-1;
+        if (!path.valid()) return (uint64_t)-LINUX_EFAULT;
 
         inode = VFS::resolvePath(path);
     }
 
-    if (!inode) return (uint64_t)-1;
+    if (!inode) return (uint64_t)-LINUX_ENOENT;
 
     RiscV::ms_sstatus(RiscV::SSTATUS_SUM);
     int ret = inode->stat(statbuf);
@@ -753,7 +755,7 @@ uint64_t SyscallHandler::sys_newfstatat(TrapFrame* tf) {
     uint32_t inum = inode->inodeNum();
     VFS::putInode(inode, inum);
 
-    return ret == 0 ? 0 : (uint64_t)-1;
+    return ret == 0 ? 0 : (uint64_t)-LINUX_ENOENT;
 }
 
 struct linux_dirent64 {
@@ -1685,4 +1687,45 @@ uint64_t SyscallHandler::sys_utimensat(TrapFrame* tf) {
     VFS::putInode(inode, num);
 
     return 0;
+}
+
+uint64_t SyscallHandler::sys_renameat2(TrapFrame* tf) {
+    int olddirfd = (int)(int64_t)tf->a0;
+    uint64_t oldPathAddr = tf->a1;
+    int newdirfd = (int)(int64_t)tf->a2;
+    uint64_t newPathAddr = tf->a3;
+
+    Process* proc = PCB::runningProcess();
+    if (!proc) return (uint64_t)-LINUX_EFAULT;
+
+    AutoPath oldRel(copyPathFromUser(oldPathAddr));
+    if (!oldRel.valid()) return (uint64_t)-LINUX_EFAULT;
+
+    AutoPath newRel(copyPathFromUser(newPathAddr));
+    if (!newRel.valid()) return (uint64_t)-LINUX_EFAULT;
+
+    char* oldAbs = nullptr;
+    if (oldRel.path[0] == '/') {
+        oldAbs = kstrdup(oldRel.path, PATH_MAX);
+    } else if (olddirfd == -100) {
+        oldAbs = proc->resolveRelative(oldRel.path);
+    } else {
+        return (uint64_t)-LINUX_ENOENT;
+    }
+    AutoPath oldAbsPath(oldAbs);
+    if (!oldAbsPath.valid()) return (uint64_t)-LINUX_EFAULT;
+
+    char* newAbs = nullptr;
+    if (newRel.path[0] == '/') {
+        newAbs = kstrdup(newRel.path, PATH_MAX);
+    } else if (newdirfd == -100) {
+        newAbs = proc->resolveRelative(newRel.path);
+    } else {
+        return (uint64_t)-LINUX_ENOENT;
+    }
+    AutoPath newAbsPath(newAbs);
+    if (!newAbsPath.valid()) return (uint64_t)-LINUX_EFAULT;
+
+    int ret = VFS::rename(oldAbsPath, newAbsPath);
+    return (ret == 0) ? 0 : (uint64_t)-LINUX_ENOENT;
 }

@@ -70,6 +70,7 @@ enum Syscall {
     SYS_MADVISE = 233,
     SYS_WAIT4 = 260,
     SYS_PRLIMIT64 = 261,
+    SYS_RENAMEAT2 = 276,
     SYS_GETRANDOM = 278,
     SYS_RSEQ = 293,
     SYS_MEMBARRIER = 283,
@@ -150,6 +151,7 @@ private:
     static uint64_t sys_symlinkat(TrapFrame* tf);
     static uint64_t sys_faccessat(TrapFrame* tf);
     static uint64_t sys_utimensat(TrapFrame* tf);
+    static uint64_t sys_renameat2(TrapFrame* tf);
 };
 
 #endif

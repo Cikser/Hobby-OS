@@ -56,6 +56,7 @@ public:
     VfsInode* create(VfsInode* parent, const char* path) override;
     int unlink(VfsInode* parent, const char* path) override;
     VfsInode* symlink(VfsInode* parent, const char* name, const char* target) override;
+    int rename(VfsInode* oldParent, const char* oldName, VfsInode* newParent, const char* newName) override;
 
 private:
     friend class Ext2Inode;

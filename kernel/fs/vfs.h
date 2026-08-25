@@ -13,6 +13,7 @@ public:
     static int create(const char* path);
     static int unlink(const char* path, uint32_t flags);
     static int symlink(const char* target, const char* linkPath);
+    static int rename(const char* oldPath, const char* newPath);
 
     static constexpr uint32_t AT_REMOVEDIR = 0x200;
 

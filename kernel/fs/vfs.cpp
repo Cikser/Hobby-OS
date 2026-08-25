@@ -385,3 +385,39 @@ VfsInode* VFS::resolveParent(const char* path, const char** outName) {
     MemoryAllocator::kfree(parentPath);
     return result;
 }
+
+int VFS::rename(const char* oldPath, const char* newPath) {
+    if (!m_mount) return -1;
+
+    const char* oldName = nullptr;
+    VfsInode* oldParent = resolveParent(oldPath, &oldName);
+    if (!oldParent) return -1;
+    if (!oldParent->isDir() || !oldName || *oldName == '\0') {
+        putInode(oldParent, oldParent->inodeNum());
+        return -1;
+    }
+
+    const char* newName = nullptr;
+    VfsInode* newParent = resolveParent(newPath, &newName);
+    if (!newParent) {
+        putInode(oldParent, oldParent->inodeNum());
+        return -1;
+    }
+    if (!newParent->isDir() || !newName || *newName == '\0') {
+        putInode(oldParent, oldParent->inodeNum());
+        putInode(newParent, newParent->inodeNum());
+        return -1;
+    }
+
+    int ret = m_mount->rename(oldParent, oldName, newParent, newName);
+
+    putInode(oldParent, oldParent->inodeNum());
+    putInode(newParent, newParent->inodeNum());
+
+    if (ret == 0) {
+        PathCache::invalidate(oldPath);
+        PathCache::invalidate(newPath);
+    }
+
+    return ret;
+}

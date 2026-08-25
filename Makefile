@@ -63,6 +63,8 @@ $(DISK_IMG): user/init.elf user/hello_musl.elf user/shell.elf
 	@rm -rf $(BUILD_DIR)/kfs_root
 	@mkdir -p $(BUILD_DIR)/kfs_root/subdir
 	@mkdir -p $(BUILD_DIR)/kfs_root/bin
+	@mkdir -p $(BUILD_DIR)/kfs_root/dev
+	@touch $(BUILD_DIR)/kfs_root/dev/null
 	@printf "%s\n" "hello kernel" > $(BUILD_DIR)/kfs_root/readme.txt
 	@printf "%s\n" "writeable"    > $(BUILD_DIR)/kfs_root/writable.txt
 	@printf "%s\n" "nested file"  > $(BUILD_DIR)/kfs_root/subdir/nested.txt

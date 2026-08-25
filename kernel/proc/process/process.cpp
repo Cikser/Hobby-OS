@@ -764,6 +764,9 @@ int Process::kill(int signum) {
             Futex::forceRemove(m_waitingOnFutexKey, this);
             m_waitingOnFutexKey = 0;
         }
+        if (m_state == ProcState::SLEEPING) {
+            Scheduler::wakeUp(this);
+        }
         setState(ProcState::READY);
         Scheduler::put(this);
     }
@@ -777,6 +780,9 @@ int Process::kill(int signum) {
             if (m_waitingOnFutexKey) {
                 Futex::forceRemove(m_waitingOnFutexKey, this);
                 m_waitingOnFutexKey = 0;
+            }
+            if (m_state == ProcState::SLEEPING) {
+                Scheduler::wakeUp(this);
             }
             setState(ProcState::READY);
             Scheduler::put(this);
